@@ -18,6 +18,7 @@ package test
 
 import (
 	"archive/tar"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/base64"
@@ -32,6 +33,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/sigstore/cosign/pkg/cosign"
+	"github.com/sigstore/sigstore/pkg/signature"
 
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
@@ -185,26 +188,48 @@ func TestGCSStorage(t *testing.T) {
 
 func TestPriya(t *testing.T) {
 	ctx := logtesting.TestContextWithLogger(t)
-	c, _, _ := setup(ctx, t)
-	t.Fatal(c.registry)
+	c, ns, _ := setup(ctx, t)
 	// defer cleanup()
 
 	// set config map
-	// resetConfig := setConfigMap(ctx, t, c, map[string]string{
-	// 	"artifacts.taskrun.format":  "simplesigning",
-	// 	"artifacts.taskrun.storage": "oci",
-	// 	"artifacts.taskrun.signer":  "x509",
-	// })
-	// defer resetConfig()
-	// time.Sleep(3 * time.Second)
+	resetConfig := setConfigMap(ctx, t, c, map[string]string{
+		"artifacts.taskrun.format":  "simplesigning",
+		"artifacts.taskrun.storage": "oci",
+		"artifacts.taskrun.signer":  "x509",
+	})
+	defer resetConfig()
+	time.Sleep(3 * time.Second)
 
-	// tr, err := c.PipelineClient.TektonV1beta1().TaskRuns(ns).Create(ctx, &simpleTaskRun, metav1.CreateOptions{})
-	// if err != nil {
-	// 	t.Errorf("error creating taskrun: %s", err)
-	// }
+	// create necessary resources
+	image := fmt.Sprintf("%s/%s", c.registry, "test")
+	task := kanikoTask(ns, image)
 
-	// // Give it a minute to complete.
-	// waitForCondition(ctx, t, c.PipelineClient, tr.Name, ns, done, 60*time.Second)
+	if _, err := c.PipelineClient.TektonV1beta1().Tasks(ns).Create(ctx, task, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("error creating task: %s", err)
+	}
+
+	taskRun := kanikoTaskRun(ns)
+	tr, err := c.PipelineClient.TektonV1beta1().TaskRuns(ns).Create(ctx, taskRun, metav1.CreateOptions{})
+	if err != nil {
+		t.Errorf("error creating taskrun: %s", err)
+	}
+
+	// Give it a minute to complete.
+	waitForCondition(ctx, t, c.PipelineClient, tr.Name, ns, done, 60*time.Second)
+
+	// Give us a minute for the signature to appear in the registry & to verify it
+	pubKey := signature.ECDSAVerifier{Key: &c.secret.x509Priv.PublicKey, HashAlg: crypto.SHA256}
+	ref, err := name.ParseReference(image, name.Insecure)
+	if err != nil {
+		t.Errorf("parsing ref: %v", err)
+	}
+	condition := func(_ *v1beta1.TaskRun) bool {
+		_, err := cosign.Verify(ctx, ref, &cosign.CheckOpts{
+			PubKey: pubKey,
+		})
+		return err == nil
+	}
+	waitForCondition(ctx, t, c.PipelineClient, tr.Name, ns, condition, 60*time.Second)
 
 }
 

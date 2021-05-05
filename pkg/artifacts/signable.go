@@ -105,14 +105,17 @@ func (oa *OCIArtifact) ExtractObjects(tr *v1beta1.TaskRun) []interface{} {
 	}
 
 	// Now check TaskResults
+	fmt.Println("~~~~~~~~~~~~~ checking task results ~~~~~~~~~~~~~~~~~~~")
 	taskResultImage := image{}
 	for _, res := range tr.Status.TaskRunResults {
+		fmt.Println(res)
 		if res.Name == "IMAGE_URL" {
 			taskResultImage.url = strings.Trim(res.Value, "\n")
 		} else if res.Name == "IMAGE_DIGEST" {
 			taskResultImage.digest = strings.Trim(res.Value, "\n")
 		}
 	}
+	fmt.Println("GOT: ", taskResultImage.url, taskResultImage.digest)
 	// Only add it if we got both the URL and digest.
 	if taskResultImage.url != "" && taskResultImage.digest != "" {
 		dgst, err := name.NewDigest(fmt.Sprintf("%s@%s", taskResultImage.url, taskResultImage.digest))

@@ -1,5 +1,3 @@
-// +build e2e
-
 /*
 Copyright 2019 The Tekton Authors
 
@@ -185,6 +183,31 @@ func TestGCSStorage(t *testing.T) {
 	checkPgpSignatures(t, sigBytes, bodyBytes)
 }
 
+func TestPriya(t *testing.T) {
+	ctx := logtesting.TestContextWithLogger(t)
+	c, _, _ := setup(ctx, t)
+	t.Fatal(c.registry)
+	// defer cleanup()
+
+	// set config map
+	// resetConfig := setConfigMap(ctx, t, c, map[string]string{
+	// 	"artifacts.taskrun.format":  "simplesigning",
+	// 	"artifacts.taskrun.storage": "oci",
+	// 	"artifacts.taskrun.signer":  "x509",
+	// })
+	// defer resetConfig()
+	// time.Sleep(3 * time.Second)
+
+	// tr, err := c.PipelineClient.TektonV1beta1().TaskRuns(ns).Create(ctx, &simpleTaskRun, metav1.CreateOptions{})
+	// if err != nil {
+	// 	t.Errorf("error creating taskrun: %s", err)
+	// }
+
+	// // Give it a minute to complete.
+	// waitForCondition(ctx, t, c.PipelineClient, tr.Name, ns, done, 60*time.Second)
+
+}
+
 func TestOCIStorage(t *testing.T) {
 	ctx := logtesting.TestContextWithLogger(t)
 	if metadata.OnGCE() {
@@ -192,7 +215,8 @@ func TestOCIStorage(t *testing.T) {
 	}
 	repo := os.Getenv("OCI_REPOSITORY")
 	if repo == "" {
-		t.Skipf("Skipping, %s requires OCI_REPOSITORY to be set.", t.Name())
+		repo = "gcr.io/priya-wadhwa"
+		// t.Skipf("Skipping, %s requires OCI_REPOSITORY to be set.", t.Name())
 	}
 	c, ns, cleanup := setup(ctx, t)
 	defer cleanup()

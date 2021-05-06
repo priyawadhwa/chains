@@ -33,6 +33,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -41,6 +42,7 @@ import (
 
 	pipelineclientset "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -54,6 +56,8 @@ type clients struct {
 	PipelineClient pipelineclientset.Interface
 
 	secret secret
+
+	registrySecret *v1.Secret
 }
 
 // newClients instantiates and returns several clientsets required for making requests to the
@@ -89,6 +93,8 @@ func setup(ctx context.Context, t *testing.T) (*clients, string, func()) {
 
 	c.secret = setupSecret(ctx, t, c.KubeClient)
 
+	c.registrySecret = setUpRegistrySecret(ctx, t, namespace, c.KubeClient)
+
 	var cleanup = func() {
 		t.Logf("Deleting namespace %s", namespace)
 		if err := c.KubeClient.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{}); err != nil {
@@ -96,6 +102,40 @@ func setup(ctx context.Context, t *testing.T) (*clients, string, func()) {
 		}
 	}
 	return c, namespace, cleanup
+}
+
+func setUpRegistrySecret(ctx context.Context, t *testing.T, namespace string, kubeClient kubernetes.Interface) *v1.Secret {
+	if os.Getenv("OCI_REPOSITORY") == "" {
+		t.Fatal("please provide an OCI repository via the OCI_REPOSITORY env var")
+	}
+	if f := os.Getenv("OCI_CREDENTIAL_FILE"); f == "" {
+		t.Fatalf("please provide a path to a credentials file for %s via the OCI_CREDENTIAL_FILE env var", os.Getenv("OCI_REPOSITORY"))
+	}
+	serivceAccountFile := os.Getenv("OCI_CREDENTIAL_FILE")
+	// create a secret
+	contents, err := ioutil.ReadFile(serivceAccountFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "regcred",
+		},
+		Data: map[string][]byte{
+			"creds.json": contents,
+		},
+	}
+
+	secret, err := kubeClient.CoreV1().Secrets(namespace).Create(ctx, s, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = kubeClient.CoreV1().Secrets("tekton-pipelines").Create(ctx, s, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return secret
 }
 
 func createNamespace(ctx context.Context, t *testing.T, namespace string, kubeClient kubernetes.Interface) {

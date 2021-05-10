@@ -189,9 +189,6 @@ func TestGCSStorage(t *testing.T) {
 
 func TestOCIStorage(t *testing.T) {
 	ctx := logtesting.TestContextWithLogger(t)
-	if metadata.OnGCE() {
-		t.Skip("Skipping, LoadBalancer not supported on GCE. Replace this with calling the service name itself once https://github.com/sigstore/cosign/issues/311 has been done.")
-	}
 	c, ns, cleanup := setup(ctx, t)
 	defer cleanup()
 
@@ -207,11 +204,6 @@ func TestOCIStorage(t *testing.T) {
 	// create necessary resources
 	imageName := "chains-test-oci-storage"
 	image := fmt.Sprintf("%s/%s", c.internalRegistry, imageName)
-
-	externalRef, err := name.ParseReference(fmt.Sprintf("%s/%s", c.externalRegistry, imageName), name.Insecure)
-	if err != nil {
-		t.Fatalf("parsing ref: %v", err)
-	}
 
 	task := kanikoTask(t, ns, image)
 
@@ -230,6 +222,11 @@ func TestOCIStorage(t *testing.T) {
 
 	pubKey := signature.ECDSAVerifier{Key: &c.secret.x509Priv.PublicKey, HashAlg: crypto.SHA256}
 
+	externalRef, err := name.ParseReference(fmt.Sprintf("%s/%s", c.externalRegistry, imageName), name.Insecure)
+	if err != nil {
+		t.Fatalf("parsing ref: %v", err)
+	}
+	t.Logf("Verifying %s...", externalRef.String())
 	// wait two minutes for the controller to sign
 	// setup a timeout channel
 	timeoutChan := make(chan struct{})
@@ -239,6 +236,8 @@ func TestOCIStorage(t *testing.T) {
 	}()
 	for {
 		select {
+		case <-timeoutChan:
+			t.Error("time out")
 		default:
 			if _, err = cosign.Verify(ctx, externalRef, &cosign.CheckOpts{
 				PubKey: pubKey,
@@ -247,8 +246,6 @@ func TestOCIStorage(t *testing.T) {
 			} else {
 				return
 			}
-		case <-timeoutChan:
-			t.Error("time out")
 		}
 	}
 }

@@ -39,6 +39,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phayes/freeport"
 	"github.com/tektoncd/pipeline/pkg/names"
 
 	pipelineclientset "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
@@ -95,14 +96,10 @@ func setup(ctx context.Context, t *testing.T) (*clients, string, func()) {
 
 	c.secret = setupSecret(ctx, t, c.KubeClient)
 	internalRegistry, svc := createRegistry(ctx, t, namespace, c.KubeClient)
-	externalRegistry, cancelPortForward := portForward(ctx, t, svc)
+	externalRegistry := portForward(ctx, t, svc)
 	c.internalRegistry, c.externalRegistry = internalRegistry, externalRegistry
 
-	// port forward the registry
-
 	var cleanup = func() {
-		t.Logf("Cancelling port forwarding")
-		cancelPortForward()
 		t.Logf("Deleting namespace %s", namespace)
 		if err := c.KubeClient.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{}); err != nil {
 			t.Fatalf("Failed to delete namespace %s for tests: %s", namespace, err)
@@ -181,16 +178,33 @@ func createRegistry(ctx context.Context, t *testing.T, namespace string, kubeCli
 	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", service.Name, service.Namespace), service
 }
 
-func portForward(ctx context.Context, t *testing.T, svc *corev1.Service) (string, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(ctx, "kubectl", "port-forward", fmt.Sprintf("svc/%s", svc.Name), "5000:5000", "-n", svc.Namespace)
+func portForward(ctx context.Context, t *testing.T, svc *corev1.Service) string {
+	freePort, err := freeport.GetFreePort()
+	if err != nil {
+		t.Error(err)
+	}
 	go func() {
-		t.Log("starting port forwarding...")
-		if err := cmd.Run(); err != nil {
-			t.Logf("port forwarding died: %v\n", err)
+		// port forwarding has a bad habit of dying randomly, so keep restarting it
+		for {
+			t.Logf("Starting port forwarding on port %d...", freePort)
+			ctx, cancel := context.WithCancel(ctx)
+			cmd := exec.CommandContext(ctx, "kubectl", "port-forward", fmt.Sprintf("svc/%s", svc.Name), fmt.Sprintf("%d:5000", freePort), "-n", svc.Namespace)
+			select {
+			case <-ctx.Done():
+				cancel()
+				return // returning not to leak the goroutine
+			default:
+				if err := cmd.Run(); err != nil {
+					t.Logf("port forwarding died: %v\n", err)
+				} else {
+					cancel()
+					return
+				}
+				cancel()
+			}
 		}
 	}()
-	return "localhost:5000", cancel
+	return fmt.Sprintf("localhost:%d", freePort)
 }
 
 func setupSecret(ctx context.Context, t *testing.T, c kubernetes.Interface) secret {

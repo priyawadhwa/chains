@@ -205,7 +205,14 @@ func TestOCIStorage(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// create necessary resources
-	image := fmt.Sprintf("%s/%s", c.registry, "chains-test-oci-storage")
+	imageName := "chains-test-oci-storage"
+	image := fmt.Sprintf("%s/%s", c.internalRegistry, imageName)
+
+	externalRef, err := name.ParseReference(fmt.Sprintf("%s/%s", c.externalRegistry, imageName), name.Insecure)
+	if err != nil {
+		t.Fatalf("parsing ref: %v", err)
+	}
+
 	task := kanikoTask(t, ns, image)
 
 	if _, err := c.PipelineClient.TektonV1beta1().Tasks(ns).Create(ctx, task, metav1.CreateOptions{}); err != nil {
@@ -222,10 +229,6 @@ func TestOCIStorage(t *testing.T) {
 	waitForCondition(ctx, t, c.PipelineClient, tr.Name, ns, done, 60*time.Second)
 
 	pubKey := signature.ECDSAVerifier{Key: &c.secret.x509Priv.PublicKey, HashAlg: crypto.SHA256}
-	ref, err := name.ParseReference(image, name.Insecure)
-	if err != nil {
-		t.Errorf("parsing ref: %v", err)
-	}
 
 	// wait two minutes for the controller to sign
 	// setup a timeout channel
@@ -237,7 +240,7 @@ func TestOCIStorage(t *testing.T) {
 	for {
 		select {
 		default:
-			if _, err = cosign.Verify(ctx, ref, &cosign.CheckOpts{
+			if _, err = cosign.Verify(ctx, externalRef, &cosign.CheckOpts{
 				PubKey: pubKey,
 			}); err != nil {
 				t.Log(err)

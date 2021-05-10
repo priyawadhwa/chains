@@ -39,7 +39,6 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/compute/metadata"
 	"github.com/tektoncd/pipeline/pkg/names"
 
 	pipelineclientset "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
@@ -57,7 +56,10 @@ type clients struct {
 	KubeClient     kubernetes.Interface
 	PipelineClient pipelineclientset.Interface
 	secret         secret
-	registry       string
+	// these represent the same registry; internal is accessible from within the cluster
+	// external is accessible from outside the cluster via port-forwarding
+	internalRegistry string
+	externalRegistry string
 }
 
 // newClients instantiates and returns several clientsets required for making requests to the
@@ -92,9 +94,15 @@ func setup(ctx context.Context, t *testing.T) (*clients, string, func()) {
 	createNamespace(ctx, t, namespace, c.KubeClient)
 
 	c.secret = setupSecret(ctx, t, c.KubeClient)
-	c.registry = createRegistry(ctx, t, c.KubeClient)
+	internalRegistry, svc := createRegistry(ctx, t, namespace, c.KubeClient)
+	externalRegistry, cancelPortForward := portForward(ctx, t, svc)
+	c.internalRegistry, c.externalRegistry = internalRegistry, externalRegistry
+
+	// port forward the registry
 
 	var cleanup = func() {
+		t.Logf("Cancelling port forwarding")
+		cancelPortForward()
 		t.Logf("Deleting namespace %s", namespace)
 		if err := c.KubeClient.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{}); err != nil {
 			t.Fatalf("Failed to delete namespace %s for tests: %s", namespace, err)
@@ -119,13 +127,8 @@ type secret struct {
 	x509Priv *ecdsa.PrivateKey
 }
 
-func createRegistry(ctx context.Context, t *testing.T, kubeClient kubernetes.Interface) string {
+func createRegistry(ctx context.Context, t *testing.T, namespace string, kubeClient kubernetes.Interface) (string, *corev1.Service) {
 	t.Helper()
-	if metadata.OnGCE() {
-		t.Log("LoadBalancer not supported on GCE, skipping creating registry")
-		return ""
-	}
-	namespace := "tekton-pipelines"
 	replicas := int32(1)
 	label := map[string]string{"app": "registry"}
 	meta := metav1.ObjectMeta{
@@ -159,66 +162,35 @@ func createRegistry(ctx context.Context, t *testing.T, kubeClient kubernetes.Int
 	service := &corev1.Service{
 		ObjectMeta: meta,
 		Spec: corev1.ServiceSpec{
-			Selector:              label,
-			ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyTypeCluster,
-			Type:                  corev1.ServiceTypeLoadBalancer,
-			Ports:                 []corev1.ServicePort{{Port: int32(5000), Protocol: corev1.ProtocolTCP, TargetPort: intstr.IntOrString{IntVal: int32(5000)}}},
+			Selector: label,
+			Ports:    []corev1.ServicePort{{Port: int32(5000), Protocol: corev1.ProtocolTCP, TargetPort: intstr.IntOrString{IntVal: int32(5000)}}},
 		},
 	}
 	// first, check if the svc already exists
 	if svc, err := kubeClient.CoreV1().Services(namespace).Get(ctx, service.Name, metav1.GetOptions{}); err == nil {
-		if ingress := svc.Status.LoadBalancer.Ingress; ingress != nil {
-			if ingress[0].IP != "" {
-				return fmt.Sprintf("%s:5000", ingress[0].IP)
-			}
-		}
+		return fmt.Sprintf("%s.%s.svc.cluster.local:5000", svc.Name, svc.Namespace), svc
 	}
 	t.Logf("Creating insecure registry to deploy in ns %s", namespace)
 	if _, err := kubeClient.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Failed to create deployment registry for tests: %s", err)
 	}
-	t.Logf("Exposing registry service")
-
 	service, err := kubeClient.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to create service for tests: %s", err)
 	}
-
-	t.Logf("Waiting for external service IP to be exposed...")
-	return waitForExternalIP(ctx, t, service, 2*time.Minute, kubeClient)
+	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", service.Name, service.Namespace), service
 }
 
-func waitForExternalIP(ctx context.Context, t *testing.T, service *corev1.Service, timeout time.Duration, c kubernetes.Interface) string {
-	t.Helper()
-	w, err := c.CoreV1().Services(service.Namespace).Watch(ctx, metav1.SingleObject(metav1.ObjectMeta{
-		Name:      service.Name,
-		Namespace: service.Namespace,
-	}))
-	if err != nil {
-		t.Errorf("error watching taskrun: %s", err)
-	}
-	// Setup a timeout channel
-	timeoutChan := make(chan struct{})
+func portForward(ctx context.Context, t *testing.T, svc *corev1.Service) (string, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	cmd := exec.CommandContext(ctx, "kubectl", "port-forward", fmt.Sprintf("svc/%s", svc.Name), "5000:5000", "-n", svc.Namespace)
 	go func() {
-		time.Sleep(timeout)
-		timeoutChan <- struct{}{}
-	}()
-
-	// Wait for the condition to be true or a timeout
-	for {
-		select {
-		case ev := <-w.ResultChan():
-			tr := ev.Object.(*corev1.Service)
-			if ingress := tr.Status.LoadBalancer.Ingress; ingress != nil {
-				if ingress[0].IP != "" {
-					return fmt.Sprintf("%s:5000", ingress[0].IP)
-				}
-			}
-		case <-timeoutChan:
-			output, err := exec.Command("kubectl", "get", "svc", "-A").CombinedOutput()
-			t.Fatalf("Error creating registry, time out:%v\n%s", err, string(output))
+		t.Log("starting port forwarding...")
+		if err := cmd.Run(); err != nil {
+			t.Logf("port forwarding died: %v\n", err)
 		}
-	}
+	}()
+	return "localhost:5000", cancel
 }
 
 func setupSecret(ctx context.Context, t *testing.T, c kubernetes.Interface) secret {

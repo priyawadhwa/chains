@@ -34,12 +34,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/phayes/freeport"
 	"github.com/tektoncd/pipeline/pkg/names"
 
 	pipelineclientset "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
@@ -179,10 +179,7 @@ func createRegistry(ctx context.Context, t *testing.T, namespace string, kubeCli
 }
 
 func portForward(ctx context.Context, t *testing.T, svc *corev1.Service) string {
-	freePort, err := freeport.GetFreePort()
-	if err != nil {
-		t.Error(err)
-	}
+	freePort := getFreePort(t)
 	go func() {
 		// port forwarding has a bad habit of dying randomly, so keep restarting it
 		for {
@@ -205,6 +202,15 @@ func portForward(ctx context.Context, t *testing.T, svc *corev1.Service) string 
 		}
 	}()
 	return fmt.Sprintf("localhost:%d", freePort)
+}
+
+func getFreePort(t *testing.T) int {
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:0", "localhost"))
+	if err != nil {
+		t.Error(err)
+		return 5000 // just return something
+	}
+	return l.Addr().(*net.TCPAddr).Port
 }
 
 func setupSecret(ctx context.Context, t *testing.T, c kubernetes.Interface) secret {

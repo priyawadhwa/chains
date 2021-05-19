@@ -1,0 +1,24 @@
+apiVersion: tekton.dev/v1beta1
+kind: TaskRun
+metadata:
+  name: kaniko-run
+spec:
+  taskRef:
+    name: kaniko
+  workspaces:
+  - name: source
+    configmap:
+      name: dockerfile
+  # - name: dockerconfig
+  #   secret:
+  #     secretName: myregistrykey
+  params:
+  - name: IMAGE
+    value: gcr.io/priya-wadhwa/test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dockerfile
+data:
+  Dockerfile: "FROM alpine@sha256:69e70a79f2d41ab5d637de98c1e0b055206ba40a8145e7bddb55ccc04e13cf8f\n"

@@ -30,9 +30,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// VerifySpire checks if the TaskRun has an SVID cert
+// Verify checks if the TaskRun has an SVID cert
 // it then verifies the provided signatures against the cert
-func VerifySpire(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) error {
+func Verify(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) error {
 	results := tr.Status.TaskRunResults
 	if err := validateResults(results, logger); err != nil {
 		return errors.Wrap(err, "validating results")
@@ -55,21 +55,28 @@ func validateResults(rs []v1beta1.TaskRunResult, logger *zap.SugaredLogger) erro
 	if err != nil {
 		return fmt.Errorf("invalid SVID: %s", err)
 	}
+	var keysToVerify []string
 	for key := range resultMap {
-		if strings.HasSuffix(key, ".sig") {
+		if strings.HasSuffix(key, ".sig") || key == "SVID" {
 			continue
 		}
-		if key == "SVID" {
-			continue
-		}
-		if err := verifyOne(cert.PublicKey, key, resultMap); err != nil {
+		keysToVerify = append(keysToVerify, key)
+	}
+
+	if len(keysToVerify) == 0 {
+		return errors.New("no results to validate with SPIRE found")
+	}
+
+	for _, key := range keysToVerify {
+		logger.Infof("trying to verify result %s against SPIRE", key)
+		if err := verifyKey(cert.PublicKey, key, resultMap); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func verifyOne(pub interface{}, key string, results map[string]v1beta1.TaskRunResult) error {
+func verifyKey(pub interface{}, key string, results map[string]v1beta1.TaskRunResult) error {
 	signature, ok := results[key+".sig"]
 	if !ok {
 		return fmt.Errorf("no signature found for %s", key)

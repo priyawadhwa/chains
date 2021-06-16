@@ -65,7 +65,6 @@ func main() {
 				TaskRunLister:     taskRunInformer.Lister(),
 				TaskRunSigner: &chains.TaskRunSigner{
 					Pipelineclientset: pipelineclientset,
-					KubeClientSet:     kubeclientset,
 					Logger:            logger,
 					SecretPath:        tkcontroller.SecretPath,
 					ConfigStore:       cfgStore,

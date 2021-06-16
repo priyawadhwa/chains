@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Tekton Authors
+Copyright 2021 The Tekton Authors
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tekton
+package spire
 
 import (
 	"crypto"
@@ -26,66 +26,35 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/tektoncd/chains/pkg/chains/formats"
-	"github.com/tektoncd/chains/pkg/config"
-	"go.uber.org/zap"
-
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	"go.uber.org/zap"
 )
 
-// Tekton is a formatter that just captures the TaskRun Status with no modifications.
-type Tekton struct {
-	logger       *zap.SugaredLogger
-	spireEnabled bool
-}
-
-func NewFormatter(cfg config.Config, l *zap.SugaredLogger) (formats.Payloader, error) {
-	return &Tekton{
-		logger: l,
-	}, nil
-}
-
-// CreatePayload implements the Payloader interface.
-func (i *Tekton) CreatePayload(obj interface{}) (interface{}, error) {
-	switch v := obj.(type) {
-	case *v1beta1.TaskRun:
-		if err := i.verifySpire(v); err != nil {
-			return nil, errors.Wrap(err, "verifying spire")
-		}
-		return v.Status, nil
-	default:
-		return nil, fmt.Errorf("unsupported type %s", v)
-	}
-}
-
-// check if we even have the SVID cert, return if not
-// parse the SVID cert
-// verify the provided signatures against the cert
-func (i *Tekton) verifySpire(tr *v1beta1.TaskRun) error {
+// VerifySpire checks if the TaskRun has an SVID cert
+// it then verifies the provided signatures against the cert
+func VerifySpire(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) error {
 	results := tr.Status.TaskRunResults
-	if err := i.validateResults(results); err != nil {
+	if err := validateResults(results, logger); err != nil {
 		return errors.Wrap(err, "validating results")
 	}
-	i.logger.Info("Successfully verified SPIRE")
+	logger.Info("Successfully verified SPIRE")
 	return nil
 }
 
-func (i *Tekton) validateResults(rs []v1beta1.TaskRunResult) error {
+func validateResults(rs []v1beta1.TaskRunResult, logger *zap.SugaredLogger) error {
 	resultMap := map[string]v1beta1.TaskRunResult{}
 	for _, r := range rs {
 		resultMap[r.Name] = r
 	}
 	svid, ok := resultMap["SVID"]
 	if !ok {
-		i.logger.Error("No SVID certificate found, skipping SPIRE verification")
-		return nil
+		return errors.New("No SVID found")
 	}
 	block, _ := pem.Decode([]byte(svid.Value))
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return fmt.Errorf("invalid SVID: %s", err)
 	}
-
 	for key := range resultMap {
 		if strings.HasSuffix(key, ".sig") {
 			continue
@@ -97,7 +66,6 @@ func (i *Tekton) validateResults(rs []v1beta1.TaskRunResult) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -114,7 +82,6 @@ func verifyOne(pub interface{}, key string, results map[string]v1beta1.TaskRunRe
 	// Check val against sig
 	switch t := pub.(type) {
 	case *ecdsa.PublicKey:
-		fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DOING A FOR REAL VALIDATION  ~~~~~~~")
 		if !ecdsa.VerifyASN1(t, h[:], b) {
 			return errors.New("invalid signature")
 		}
@@ -129,8 +96,4 @@ func verifyOne(pub interface{}, key string, results map[string]v1beta1.TaskRunRe
 	default:
 		return fmt.Errorf("unsupported key type: %s", t)
 	}
-}
-
-func (i *Tekton) Type() formats.PayloadType {
-	return formats.PayloadTypeTekton
 }

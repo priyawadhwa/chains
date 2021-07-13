@@ -38,8 +38,8 @@ type StatementHeader struct {
 	Subject Subject `json:"subject"`
 }
 
-// ProvenanceStatement is the definition for an entire provenance statement.
-type ProvenanceStatement struct {
+// TektonProvenanceStatement is the definition for an entire provenance statement.
+type TektonProvenanceStatement struct {
 	StatementHeader
 	Predicate ProvenancePredicate `json:"predicate"`
 }

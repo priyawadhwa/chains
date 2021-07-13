@@ -237,7 +237,7 @@ func (ts *TaskRunSigner) SignTaskRun(ctx context.Context, tr *v1beta1.TaskRun) e
 			}
 
 			if cfg.Transparency.Enabled {
-				if payloadFormat == "in-toto" || payloadFormat == "provenance" {
+				if payloadFormat == "in-toto" || payloadFormat == "tekton-provenance" {
 					entry, err := rekorClient.UploadTlog(ctx, signer, signature, signed)
 					if err != nil {
 						ts.Logger.Error(err)

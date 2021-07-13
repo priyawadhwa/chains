@@ -129,7 +129,7 @@ Pins down the material to an immutable version (e.g. pins down a Git repo to a s
   {
     "_type": "",
     "name": "build-distroless-sr6pn",
-    "predicateType": "",
+    "predicateType": "https://tekton.dev/chains/provenance",
     "subject": {
       "name": "gcr.io/foo/bar",
       "digest": {

@@ -81,10 +81,11 @@ func (i *Provenance) generateProvenanceFromSubject(tr *v1beta1.TaskRun, subject 
 	if tr.Spec.TaskRef != nil {
 		name = tr.Spec.TaskRef.Name
 	}
-	att := provenance.ProvenanceStatement{
+	att := provenance.TektonProvenanceStatement{
 		StatementHeader: provenance.StatementHeader{
-			Name:    name,
-			Subject: subject,
+			Name:          name,
+			Subject:       subject,
+			PredicateType: "https://tekton.dev/chains/provenance",
 		},
 	}
 	// add the metadata
@@ -121,20 +122,19 @@ func metadata(tr *v1beta1.TaskRun) provenance.ProvenanceMetadata {
 // add any Git specification to materials
 func materials(tr *v1beta1.TaskRun) []provenance.ProvenanceMaterial {
 	var mats []provenance.ProvenanceMaterial
-
-	gitCommit, gitURL := gitInfo(tr)
-
-	// Store git rev as Materials and Recipe.Material
-	if gitCommit != "" && gitURL != "" {
-		mats = append(mats, provenance.ProvenanceMaterial{
-			URI:    gitURL,
-			Digest: map[string]string{"git_commit": gitCommit},
-		})
-	}
-
 	if tr.Spec.Resources == nil {
+		gitCommit, gitURL := gitInfo(tr)
+
+		// Store git rev as Materials and Recipe.Material
+		if gitCommit != "" && gitURL != "" {
+			mats = append(mats, provenance.ProvenanceMaterial{
+				URI:    gitURL,
+				Digest: map[string]string{"git_commit": gitCommit},
+			})
+		}
 		return mats
 	}
+
 	// check for a Git PipelineResource
 	for _, input := range tr.Spec.Resources.Inputs {
 		if input.ResourceSpec.Type != v1alpha1.PipelineResourceTypeGit {
@@ -255,13 +255,6 @@ func recipe(tr *v1beta1.TaskRun) provenance.ProvenanceRecipe {
 
 func container(stepState v1beta1.StepState, tr *v1beta1.TaskRun) v1beta1.Step {
 	name := stepState.Name
-	if tr.Spec.TaskSpec != nil {
-		for _, s := range tr.Spec.TaskSpec.Steps {
-			if s.Name == name {
-				return s
-			}
-		}
-	}
 	if tr.Status.TaskSpec != nil {
 		for _, s := range tr.Status.TaskSpec.Steps {
 			if s.Name == name {

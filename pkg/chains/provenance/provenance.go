@@ -21,29 +21,6 @@ algorithm name to lowercase hex-encoded value.
 */
 type DigestSet map[string]string
 
-// Subject describes the set of software artifacts the statement applies to.
-type Subject struct {
-	Name   string    `json:"name"`
-	Digest DigestSet `json:"digest"`
-}
-
-// StatementHeader defines the common fields for all statements
-type StatementHeader struct {
-	Type string `json:"_type"`
-
-	// added here
-	Name          string `json:"name"`
-	PredicateType string `json:"predicateType"`
-	// removed: option for multiple subjects
-	Subject Subject `json:"subject"`
-}
-
-// TektonProvenanceStatement is the definition for an entire provenance statement.
-type TektonProvenanceStatement struct {
-	StatementHeader
-	Predicate ProvenancePredicate `json:"predicate"`
-}
-
 // ProvenancePredicate is the provenance predicate definition.
 type ProvenancePredicate struct {
 	// removed: ProvenanceBuilder

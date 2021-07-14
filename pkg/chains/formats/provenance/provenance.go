@@ -129,7 +129,7 @@ func materials(tr *v1beta1.TaskRun) []provenance.ProvenanceMaterial {
 		if gitCommit != "" && gitURL != "" {
 			mats = append(mats, provenance.ProvenanceMaterial{
 				URI:    gitURL,
-				Digest: map[string]string{"git_commit": gitCommit},
+				Digest: map[string]string{"revision": gitCommit},
 			})
 		}
 		return mats
@@ -281,10 +281,6 @@ func gitInfo(tr *v1beta1.TaskRun) (commit string, url string) {
 		}
 		if p.Name == urlParam {
 			url = p.Value.StringVal
-			// make sure url is PURL (git+https)
-			if !strings.HasPrefix(url, "git+") {
-				url = "git+" + url
-			}
 		}
 	}
 	return

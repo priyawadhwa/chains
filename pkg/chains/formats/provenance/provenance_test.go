@@ -24,6 +24,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
+	"github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/tektoncd/chains/pkg/chains/provenance"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	"github.com/tektoncd/pipeline/pkg/apis/resource/v1alpha1"
@@ -47,8 +48,8 @@ func TestMetadata(t *testing.T) {
 		},
 		Status: v1beta1.TaskRunStatus{
 			TaskRunStatusFields: v1beta1.TaskRunStatusFields{
-				StartTime:      &v1.Time{time.Date(1995, time.December, 24, 6, 12, 12, 12, time.UTC)},
-				CompletionTime: &v1.Time{time.Date(1995, time.December, 24, 6, 12, 12, 24, time.UTC)},
+				StartTime:      &v1.Time{Time: time.Date(1995, time.December, 24, 6, 12, 12, 12, time.UTC)},
+				CompletionTime: &v1.Time{Time: time.Date(1995, time.December, 24, 6, 12, 12, 24, time.UTC)},
 			},
 		},
 	}
@@ -288,15 +289,15 @@ func TestGetSubjectDigests(t *testing.T) {
 		},
 	}
 
-	expected := []provenance.Subject{
+	expected := []in_toto.Subject{
 		{
 			Name: "index.docker.io/registry/myimage",
-			Digest: provenance.DigestSet{
+			Digest: in_toto.DigestSet{
 				"sha256": strings.TrimPrefix(digest1, "sha256:"),
 			},
 		}, {
 			Name: "registry/resource-image",
-			Digest: provenance.DigestSet{
+			Digest: in_toto.DigestSet{
 				"sha256": strings.TrimPrefix(digest2, "sha256:"),
 			},
 		},

@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/pkg/errors"
 	"github.com/tektoncd/chains/pkg/artifacts"
 	"github.com/tektoncd/chains/pkg/chains/formats"
@@ -64,41 +65,36 @@ func (i *Provenance) CreatePayload(obj interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("intoto does not support type: %s", v)
 	}
 	subjects := getSubjectDigests(tr, i.logger)
-	var attestations []interface{}
-	for _, subj := range subjects {
-		att, err := i.generateProvenanceFromSubject(tr, subj)
-		if err != nil {
-			return nil, errors.Wrapf(err, "generating provenance for subject %s", subj)
-		}
-		attestations = append(attestations, att)
+	att, err := i.generateProvenanceFromSubject(tr, subjects)
+	if err != nil {
+		return nil, errors.Wrapf(err, "generating provenance for subject %s", subjects)
 	}
-	return attestations, nil
+	return att, nil
 }
 
-func (i *Provenance) generateProvenanceFromSubject(tr *v1beta1.TaskRun, subject provenance.Subject) (interface{}, error) {
+func (i *Provenance) generateProvenanceFromSubject(tr *v1beta1.TaskRun, subjects []in_toto.Subject) (interface{}, error) {
 	// first store the subject
 	name := tr.Name
 	if tr.Spec.TaskRef != nil {
 		name = tr.Spec.TaskRef.Name
 	}
-	att := provenance.TektonProvenanceStatement{
-		StatementHeader: provenance.StatementHeader{
-			Name:          name,
-			Subject:       subject,
+
+	att := in_toto.Statement{
+		StatementHeader: in_toto.StatementHeader{
+			Type:          name,
+			Subject:       subjects,
 			PredicateType: "https://tekton.dev/chains/provenance",
 		},
 	}
-	// add the metadata
-	att.Predicate.Metadata = metadata(tr)
 
-	// get the invocation
-	att.Predicate.Invocation = invocation(i.builderID, tr)
+	pred := provenance.ProvenancePredicate{
+		Metadata:   metadata(tr),
+		Invocation: invocation(i.builderID, tr),
+		Materials:  materials(tr),
+		Recipe:     recipe(tr),
+	}
 
-	// now, get the materials
-	att.Predicate.Materials = materials(tr)
-
-	// now, generate the recipe
-	att.Predicate.Recipe = recipe(tr)
+	att.Predicate = pred
 	return att, nil
 }
 
@@ -299,15 +295,15 @@ func gitInfo(tr *v1beta1.TaskRun) (commit string, url string) {
 // Digests can be on two formats: $alg:$digest (commonly used for container
 // image hashes), or $alg:$digest $path, which is used when a step is
 // calculating a hash of a previous step.
-func getSubjectDigests(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) []provenance.Subject {
-	var subjects []provenance.Subject
+func getSubjectDigests(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) []in_toto.Subject {
+	var subjects []in_toto.Subject
 
 	imgs := artifacts.ExtractOCIImagesFromResults(tr, logger)
 	for _, i := range imgs {
 		if d, ok := i.(name.Digest); ok {
-			subjects = append(subjects, provenance.Subject{
+			subjects = append(subjects, in_toto.Subject{
 				Name: d.Repository.Name(),
-				Digest: provenance.DigestSet{
+				Digest: in_toto.DigestSet{
 					"sha256": strings.TrimPrefix(d.DigestStr(), "sha256:"),
 				},
 			})
@@ -335,9 +331,9 @@ func getSubjectDigests(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) []provena
 					}
 				}
 			}
-			subjects = append(subjects, provenance.Subject{
+			subjects = append(subjects, in_toto.Subject{
 				Name: url,
-				Digest: provenance.DigestSet{
+				Digest: in_toto.DigestSet{
 					"sha256": strings.TrimPrefix(digest, "sha256:"),
 				},
 			})

@@ -65,7 +65,7 @@ func newStorageBackendWithColl(logger *zap.SugaredLogger, tr *v1beta1.TaskRun, c
 }
 
 // StorePayload implements the Payloader interface.
-func (b *Backend) StorePayload(signed []byte, signature string, key string) error {
+func (b *Backend) StorePayload(signed []byte, signature string, opts config.StorageOpts) error {
 	var obj interface{}
 	if err := json.Unmarshal(signed, &obj); err != nil {
 		return err
@@ -75,7 +75,7 @@ func (b *Backend) StorePayload(signed []byte, signature string, key string) erro
 		Signed:    signed,
 		Signature: base64.StdEncoding.EncodeToString([]byte(signature)),
 		Object:    obj,
-		Name:      key,
+		Name:      opts.Key,
 	}
 
 	if err := b.coll.Put(context.Background(), &entry); err != nil {

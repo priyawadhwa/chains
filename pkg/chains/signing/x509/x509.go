@@ -36,43 +36,29 @@ import (
 
 // Signer exposes methods to sign payloads.
 type Signer struct {
+	Cert string
 	signature.Signer
 	logger *zap.SugaredLogger
 }
 
 // NewSigner returns a configured Signer
 func NewSigner(secretPath string, cfg config.Config, logger *zap.SugaredLogger) (*Signer, error) {
-	var signer *signature.ECDSASignerVerifier
-	var err error
-
 	x509PrivateKeyPath := filepath.Join(secretPath, "x509.pem")
 	cosignPrivateKeypath := filepath.Join(secretPath, "cosign.key")
 
 	if cfg.Signers.X509.FulcioEnabled {
-		signer, err = fulcioSigner(logger)
-		if err != nil {
-			return nil, err
-		}
+		return fulcioSigner(logger)
 	} else if contents, err := ioutil.ReadFile(x509PrivateKeyPath); err == nil {
-		signer, err = x509Signer(contents, logger)
-		if err != nil {
-			return nil, err
-		}
+		return x509Signer(contents, logger)
 	} else if contents, err := ioutil.ReadFile(cosignPrivateKeypath); err == nil {
-		signer, err = cosignSigner(secretPath, contents, logger)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, errors.New("no valid private key found, looked for: [x509.pem, cosign.key]")
+		return cosignSigner(secretPath, contents, logger)
 	}
-	return &Signer{
-		Signer: signer,
-		logger: logger,
-	}, nil
+	return nil, errors.New("no valid private key found, looked for: [x509.pem, cosign.key]")
 }
 
-func fulcioSigner(logger *zap.SugaredLogger) (*signature.ECDSASignerVerifier, error) {
+func fulcioSigner(logger *zap.SugaredLogger) (*Signer, error) {
+	logger.Info("Signing with fulcio ...")
+
 	ts, err := idtoken.NewTokenSource(context.Background(), "sigstore")
 	if err != nil {
 		return nil, err
@@ -86,10 +72,14 @@ func fulcioSigner(logger *zap.SugaredLogger) (*signature.ECDSASignerVerifier, er
 	if err != nil {
 		return nil, err
 	}
-	return k.ECDSASignerVerifier, nil
+	return &Signer{
+		Signer: k.ECDSASignerVerifier,
+		Cert:   k.Cert,
+		logger: logger,
+	}, nil
 }
 
-func x509Signer(privateKey []byte, logger *zap.SugaredLogger) (*signature.ECDSASignerVerifier, error) {
+func x509Signer(privateKey []byte, logger *zap.SugaredLogger) (*Signer, error) {
 	logger.Info("Found x509 key...")
 
 	p, _ := pem.Decode(privateKey)
@@ -100,17 +90,25 @@ func x509Signer(privateKey []byte, logger *zap.SugaredLogger) (*signature.ECDSAS
 	if err != nil {
 		return nil, err
 	}
-	return signature.LoadECDSASignerVerifier(pk.(*ecdsa.PrivateKey), crypto.SHA256)
+	signer, err := signature.LoadECDSASignerVerifier(pk.(*ecdsa.PrivateKey), crypto.SHA256)
+	if err != nil {
+		return nil, err
+	}
+	return &Signer{Signer: signer, logger: logger}, nil
 }
 
-func cosignSigner(secretPath string, privateKey []byte, logger *zap.SugaredLogger) (*signature.ECDSASignerVerifier, error) {
+func cosignSigner(secretPath string, privateKey []byte, logger *zap.SugaredLogger) (*Signer, error) {
 	logger.Info("Found cosign key...")
 	cosignPasswordPath := filepath.Join(secretPath, "cosign.password")
 	password, err := ioutil.ReadFile(cosignPasswordPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "reading cosign.password file")
 	}
-	return cosign.LoadECDSAPrivateKey(privateKey, password)
+	signer, err := cosign.LoadECDSAPrivateKey(privateKey, password)
+	if err != nil {
+		return nil, err
+	}
+	return &Signer{Signer: signer, logger: logger}, nil
 }
 
 func (s *Signer) Type() string {

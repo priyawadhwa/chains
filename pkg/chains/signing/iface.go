@@ -19,6 +19,7 @@ type Signer interface {
 	signature.Signer
 	Type() string
 	Cert() string
+	Chain() string
 }
 
 const (

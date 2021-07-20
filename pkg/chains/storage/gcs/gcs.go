@@ -96,6 +96,16 @@ func (b *Backend) StorePayload(rawPayload []byte, signature string, opts config.
 		return err
 	}
 
+	chainName := path.Join(root, fmt.Sprintf("%s.chain", opts.Key))
+	chainObj := b.writer.GetWriter(chainName)
+	defer chainObj.Close()
+	if _, err := chainObj.Write([]byte(opts.Chain)); err != nil {
+		return err
+	}
+	if err := chainObj.Close(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

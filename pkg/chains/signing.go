@@ -233,8 +233,9 @@ func (ts *TaskRunSigner) SignTaskRun(ctx context.Context, tr *v1beta1.TaskRun) e
 			// Now store those!
 			b := allBackends[signableType.StorageBackend(cfg)]
 			storageOpts := config.StorageOpts{
-				Key:  signableType.Key(obj),
-				Cert: signer.Cert(),
+				Key:   signableType.Key(obj),
+				Cert:  signer.Cert(),
+				Chain: signer.Chain(),
 			}
 			if err := b.StorePayload(rawPayload, string(signature), storageOpts); err != nil {
 				ts.Logger.Error(err)

@@ -18,6 +18,7 @@ package config
 
 // StorageOpts contains additional information required when storing signatures
 type StorageOpts struct {
-	Key  string
-	Cert string
+	Key   string
+	Cert  string
+	Chain string
 }

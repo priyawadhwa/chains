@@ -52,3 +52,8 @@ func (s *Signer) Type() string {
 func (s *Signer) Cert() string {
 	return ""
 }
+
+// there is no cert or chain, return nothing
+func (s *Signer) Chain() string {
+	return ""
+}

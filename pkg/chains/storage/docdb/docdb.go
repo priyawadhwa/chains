@@ -42,6 +42,7 @@ type SignedDocument struct {
 	Signed    []byte
 	Signature string
 	Cert      string
+	Chain     string
 	Object    interface{}
 	Name      string
 }
@@ -78,6 +79,7 @@ func (b *Backend) StorePayload(signed []byte, signature string, opts config.Stor
 		Object:    obj,
 		Name:      opts.Key,
 		Cert:      opts.Cert,
+		Chain:     opts.Chain,
 	}
 
 	if err := b.coll.Put(context.Background(), &entry); err != nil {

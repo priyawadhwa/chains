@@ -92,6 +92,7 @@ func (b *Backend) StorePayload(rawPayload []byte, signature string, storageOpts 
 	if _, err = cremote.UploadSignature([]byte(signature), rawPayload, cosignDst, cremote.UploadOpts{
 		RemoteOpts: []remote.Option{b.auth},
 		Cert:       storageOpts.Cert,
+		Chain:      storageOpts.Chain,
 	}); err != nil {
 		return errors.Wrap(err, "uploading")
 	}

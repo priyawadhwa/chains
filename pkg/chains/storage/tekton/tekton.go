@@ -33,6 +33,7 @@ const (
 	PayloadAnnotationFormat   = "chains.tekton.dev/payload-%s"
 	SignatureAnnotationFormat = "chains.tekton.dev/signature-%s"
 	CertAnnotationsFormat     = "chains.tekton.dev/cert-%s"
+	ChainAnnotationFormat     = "chains.tekton.dev/chain-%s"
 )
 
 // Backend is a storage backend that stores signed payloads in the TaskRun metadata as an annotation.
@@ -62,6 +63,7 @@ func (b *Backend) StorePayload(rawPayload []byte, signature string, opts config.
 		fmt.Sprintf(PayloadAnnotationFormat, opts.Key):   base64.StdEncoding.EncodeToString(rawPayload),
 		fmt.Sprintf(SignatureAnnotationFormat, opts.Key): base64.StdEncoding.EncodeToString([]byte(signature)),
 		fmt.Sprintf(CertAnnotationsFormat, opts.Key):     base64.StdEncoding.EncodeToString([]byte(opts.Cert)),
+		fmt.Sprintf(ChainAnnotationFormat, opts.Key):     base64.StdEncoding.EncodeToString([]byte(opts.Chain)),
 	})
 	if err != nil {
 		return err

@@ -103,3 +103,8 @@ func (s *sslSigner) SignMessage(payload io.Reader, opts ...signature.SignOption)
 	}
 	return b, nil
 }
+
+// there is no cert, return nothing
+func (w *sslSigner) Cert() string {
+	return ""
+}

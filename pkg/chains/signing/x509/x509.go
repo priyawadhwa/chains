@@ -36,7 +36,7 @@ import (
 
 // Signer exposes methods to sign payloads.
 type Signer struct {
-	Cert string
+	cert string
 	signature.Signer
 	logger *zap.SugaredLogger
 }
@@ -74,7 +74,7 @@ func fulcioSigner(logger *zap.SugaredLogger) (*Signer, error) {
 	}
 	return &Signer{
 		Signer: k.ECDSASignerVerifier,
-		Cert:   k.Cert,
+		cert:   k.Cert,
 		logger: logger,
 	}, nil
 }
@@ -113,4 +113,8 @@ func cosignSigner(secretPath string, privateKey []byte, logger *zap.SugaredLogge
 
 func (s *Signer) Type() string {
 	return signing.TypeX509
+}
+
+func (s *Signer) Cert() string {
+	return s.cert
 }

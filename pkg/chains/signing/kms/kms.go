@@ -47,3 +47,8 @@ func NewSigner(cfg config.KMSSigner, logger *zap.SugaredLogger) (*Signer, error)
 func (s *Signer) Type() string {
 	return signing.TypeKMS
 }
+
+// there is no cert, return nothing
+func (s *Signer) Cert() string {
+	return ""
+}

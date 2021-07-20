@@ -47,12 +47,6 @@ type Artifact struct {
 	Signer         string
 }
 
-// StorageOpts contains additional information required when storing signatures
-type StorageOpts struct {
-	Key  string
-	Cert string
-}
-
 // StorageConfig contains the configuration to instantiate different storage providers
 type StorageConfigs struct {
 	GCS    GCSStorageConfig

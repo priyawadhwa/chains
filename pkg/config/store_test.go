@@ -78,6 +78,12 @@ func TestNewConfigStore(t *testing.T) {
 	}
 }
 
+var defaultSigners = SignerConfigs{
+	X509: X509Signer{
+		FulcioAuth: "google",
+	},
+}
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name string
@@ -103,6 +109,7 @@ func TestParse(t *testing.T) {
 						Signer:         "x509",
 					},
 				},
+				Signers: defaultSigners,
 				Transparency: TransparencyConfig{
 					URL: "https://rekor.sigstore.dev",
 				},
@@ -127,6 +134,7 @@ func TestParse(t *testing.T) {
 						Signer:         "x509",
 					},
 				},
+				Signers: defaultSigners,
 				Transparency: TransparencyConfig{
 					URL: "https://rekor.sigstore.dev",
 				},
@@ -151,13 +159,17 @@ func TestParse(t *testing.T) {
 						Signer:         "x509",
 					},
 				},
+				Signers: defaultSigners,
 				Transparency: TransparencyConfig{
 					URL: "https://rekor.sigstore.dev",
 				},
 			},
 		}, {
 			name: "fulcio",
-			data: map[string]string{taskrunSignerKey: "x509", "signers.x509.fulcio.enabled": "true"},
+			data: map[string]string{
+				taskrunSignerKey:              "x509",
+				"signers.x509.fulcio.enabled": "true",
+			},
 			want: Config{
 				Builder: BuilderConfig{
 					"tekton-chains",
@@ -177,6 +189,7 @@ func TestParse(t *testing.T) {
 				Signers: SignerConfigs{
 					X509: X509Signer{
 						FulcioEnabled: true,
+						FulcioAuth:    "google",
 					},
 				},
 				Transparency: TransparencyConfig{

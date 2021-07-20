@@ -67,6 +67,7 @@ type BuilderConfig struct {
 
 type X509Signer struct {
 	FulcioEnabled bool
+	FulcioAuth    string
 }
 
 type KMSSigner struct {
@@ -115,6 +116,7 @@ const (
 	kmsSignerKMSRef = "signers.kms.kmsref"
 	// Fulcio
 	x509SignerFulcioEnabled = "signers.x509.fulcio.enabled"
+	x509SignerFulcioAuth    = "signers.x509.fulcio.auth"
 
 	// Builder config
 	builderIDKey = "builder.id"
@@ -126,14 +128,15 @@ const (
 )
 
 var defaults = map[string]string{
-	taskrunFormatKey:   "tekton",
-	taskrunStorageKey:  "tekton",
-	taskrunSignerKey:   "x509",
-	ociFormatKey:       "simplesigning",
-	ociStorageKey:      "oci",
-	ociSignerKey:       "x509",
-	transparencyURLKey: "https://rekor.sigstore.dev",
-	builderIDKey:       "tekton-chains",
+	taskrunFormatKey:     "tekton",
+	taskrunStorageKey:    "tekton",
+	taskrunSignerKey:     "x509",
+	ociFormatKey:         "simplesigning",
+	ociStorageKey:        "oci",
+	ociSignerKey:         "x509",
+	transparencyURLKey:   "https://rekor.sigstore.dev",
+	builderIDKey:         "tekton-chains",
+	x509SignerFulcioAuth: "google",
 }
 
 var supportedValues = map[string][]string{
@@ -173,6 +176,7 @@ func parse(data map[string]string, logger *zap.SugaredLogger) Config {
 	cfg.Signers.KMS.KMSRef = valueOrDefault(kmsSignerKMSRef, data, logger)
 
 	cfg.Signers.X509.FulcioEnabled = (valueOrDefault(x509SignerFulcioEnabled, data, logger) == "true")
+	cfg.Signers.X509.FulcioAuth = valueOrDefault(x509SignerFulcioAuth, data, logger)
 
 	// Build config
 	cfg.Builder.ID = valueOrDefault(builderIDKey, data, logger)

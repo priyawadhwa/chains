@@ -48,7 +48,7 @@ func NewSigner(secretPath string, cfg config.Config, logger *zap.SugaredLogger) 
 	cosignPrivateKeypath := filepath.Join(secretPath, "cosign.key")
 
 	if cfg.Signers.X509.FulcioEnabled {
-		return fulcioSigner(logger)
+		return fulcioSigner(cfg.Signers.X509.FulcioAuth, logger)
 	} else if contents, err := ioutil.ReadFile(x509PrivateKeyPath); err == nil {
 		return x509Signer(contents, logger)
 	} else if contents, err := ioutil.ReadFile(cosignPrivateKeypath); err == nil {
@@ -57,7 +57,10 @@ func NewSigner(secretPath string, cfg config.Config, logger *zap.SugaredLogger) 
 	return nil, errors.New("no valid private key found, looked for: [x509.pem, cosign.key]")
 }
 
-func fulcioSigner(logger *zap.SugaredLogger) (*Signer, error) {
+func fulcioSigner(auth string, logger *zap.SugaredLogger) (*Signer, error) {
+	if auth != "google" {
+		return nil, errors.New(fmt.Sprintf("%s is not yet implemented as an authorization scheme for the fulcio signer", auth))
+	}
 	logger.Info("Signing with fulcio ...")
 
 	ts, err := idtoken.NewTokenSource(context.Background(), "sigstore")

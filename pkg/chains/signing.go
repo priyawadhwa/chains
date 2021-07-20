@@ -95,7 +95,7 @@ func allSigners(sp string, cfg config.Config, l *zap.SugaredLogger) map[string]s
 	for _, s := range signing.AllSigners {
 		switch s {
 		case signing.TypeX509:
-			signer, err := x509.NewSigner(sp, l)
+			signer, err := x509.NewSigner(sp, cfg, l)
 			if err != nil {
 				l.Warnf("error configuring x509 signer: %s", err)
 				continue

@@ -14,6 +14,7 @@ limitations under the License.
 package x509
 
 import (
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	cx509 "crypto/x509"
@@ -22,10 +23,14 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"google.golang.org/api/idtoken"
+
 	"github.com/pkg/errors"
 	"github.com/sigstore/cosign/pkg/cosign"
+	"github.com/sigstore/cosign/pkg/cosign/fulcio"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"github.com/tektoncd/chains/pkg/chains/signing"
+	"github.com/tektoncd/chains/pkg/config"
 	"go.uber.org/zap"
 )
 
@@ -36,13 +41,19 @@ type Signer struct {
 }
 
 // NewSigner returns a configured Signer
-func NewSigner(secretPath string, logger *zap.SugaredLogger) (*Signer, error) {
+func NewSigner(secretPath string, cfg config.Config, logger *zap.SugaredLogger) (*Signer, error) {
+	var signer *signature.ECDSASignerVerifier
+	var err error
 
 	x509PrivateKeyPath := filepath.Join(secretPath, "x509.pem")
 	cosignPrivateKeypath := filepath.Join(secretPath, "cosign.key")
 
-	var signer *signature.ECDSASignerVerifier
-	if contents, err := ioutil.ReadFile(x509PrivateKeyPath); err == nil {
+	if cfg.Signers.X509.FulcioAddr != "" {
+		signer, err = fulcioSigner(logger)
+		if err != nil {
+			return nil, err
+		}
+	} else if contents, err := ioutil.ReadFile(x509PrivateKeyPath); err == nil {
 		signer, err = x509Signer(contents, logger)
 		if err != nil {
 			return nil, err
@@ -59,6 +70,23 @@ func NewSigner(secretPath string, logger *zap.SugaredLogger) (*Signer, error) {
 		Signer: signer,
 		logger: logger,
 	}, nil
+}
+
+func fulcioSigner(logger *zap.SugaredLogger) (*signature.ECDSASignerVerifier, error) {
+	ts, err := idtoken.NewTokenSource(context.Background(), "sigstore")
+	if err != nil {
+		return nil, err
+	}
+	tok, err := ts.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	k, err := fulcio.NewSigner(context.Background(), tok.AccessToken)
+	if err != nil {
+		return nil, err
+	}
+	return k.ECDSASignerVerifier, nil
 }
 
 func x509Signer(privateKey []byte, logger *zap.SugaredLogger) (*signature.ECDSASignerVerifier, error) {

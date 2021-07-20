@@ -82,6 +82,20 @@ func (b *Backend) StorePayload(rawPayload []byte, signature string, opts config.
 	if err := payloadObj.Close(); err != nil {
 		return err
 	}
+
+	if opts.Cert == "" {
+		return nil
+	}
+	certName := path.Join(root, fmt.Sprintf("%s.cert", opts.Key))
+	certObj := b.writer.GetWriter(certName)
+	defer certObj.Close()
+	if _, err := certObj.Write([]byte(opts.Cert)); err != nil {
+		return err
+	}
+	if err := certObj.Close(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

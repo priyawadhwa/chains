@@ -48,7 +48,7 @@ func NewSigner(secretPath string, cfg config.Config, logger *zap.SugaredLogger) 
 	x509PrivateKeyPath := filepath.Join(secretPath, "x509.pem")
 	cosignPrivateKeypath := filepath.Join(secretPath, "cosign.key")
 
-	if cfg.Signers.X509.FulcioAddr != "" {
+	if cfg.Signers.X509.FulcioEnabled {
 		signer, err = fulcioSigner(logger)
 		if err != nil {
 			return nil, err

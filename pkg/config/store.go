@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Tekton Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package config
 
 import (
@@ -50,7 +66,7 @@ type BuilderConfig struct {
 }
 
 type X509Signer struct {
-	FulcioAddr string
+	FulcioEnabled bool
 }
 
 type KMSSigner struct {
@@ -97,8 +113,8 @@ const (
 
 	// KMS
 	kmsSignerKMSRef = "signers.kms.kmsref"
-	// KMS
-	x509SignerFulcioAddr = "signers.x509.fulcioaddr"
+	// Fulcio
+	x509SignerFulcioEnabled = "signers.x509.fulcio.enabled"
 
 	// Builder config
 	builderIDKey = "builder.id"
@@ -117,8 +133,7 @@ var defaults = map[string]string{
 	ociStorageKey:      "oci",
 	ociSignerKey:       "x509",
 	transparencyURLKey: "https://rekor.sigstore.dev",
-
-	builderIDKey: "tekton-chains",
+	builderIDKey:       "tekton-chains",
 }
 
 var supportedValues = map[string][]string{
@@ -157,7 +172,7 @@ func parse(data map[string]string, logger *zap.SugaredLogger) Config {
 
 	cfg.Signers.KMS.KMSRef = valueOrDefault(kmsSignerKMSRef, data, logger)
 
-	cfg.Signers.X509.FulcioAddr = valueOrDefault(x509SignerFulcioAddr, data, logger)
+	cfg.Signers.X509.FulcioEnabled = (valueOrDefault(x509SignerFulcioEnabled, data, logger) == "true")
 
 	// Build config
 	cfg.Builder.ID = valueOrDefault(builderIDKey, data, logger)

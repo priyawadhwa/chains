@@ -62,7 +62,6 @@ paths:
 definitions:
   Entry:
     type: object
-    discriminator: kind
     properties:
       svid:
         type: string

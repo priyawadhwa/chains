@@ -33,7 +33,7 @@ validate-openapi: $(SWAGGER)
 
 .PHONY: gen
 gen: $(SWAGGER) $(OPENAPIDEPS)
-	$(SWAGGER) generate server -f openapi.yaml -q -r hack/boilerplate/boilerplate.txt -t pkg/chains/generated --exclude-main -A chains-server --exclude-spec --flag-strategy=pflag --default-produces application/json
+	$(SWAGGER) generate server -f openapi.yaml -q -r hack/boilerplate/boilerplate.txt -t pkg/server/generated --exclude-main -A chains-server --exclude-spec --flag-strategy=pflag --default-produces application/json
 
 $(SWAGGER): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR); go build -tags=tools -o $(TOOLS_BIN_DIR)/swagger github.com/go-swagger/go-swagger/cmd/swagger

@@ -153,13 +153,13 @@ github.com/docker/docker/pkg/homedir
 # github.com/docker/docker-credential-helpers v0.6.3
 github.com/docker/docker-credential-helpers/client
 github.com/docker/docker-credential-helpers/credentials
+# github.com/docker/go-units v0.4.0
+github.com/docker/go-units
 # github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful
 github.com/emicklei/go-restful/log
 # github.com/evanphx/json-patch v4.9.0+incompatible
 github.com/evanphx/json-patch
-# github.com/felixge/httpsnoop v1.0.1
-github.com/felixge/httpsnoop
 # github.com/form3tech-oss/jwt-go v3.2.3+incompatible
 github.com/form3tech-oss/jwt-go
 # github.com/fsnotify/fsnotify v1.4.9
@@ -181,19 +181,20 @@ github.com/go-openapi/analysis/internal/flatten/replace
 github.com/go-openapi/analysis/internal/flatten/schutils
 github.com/go-openapi/analysis/internal/flatten/sortref
 # github.com/go-openapi/errors v0.20.0
+## explicit
 github.com/go-openapi/errors
-# github.com/go-openapi/inflect v0.19.0
-github.com/go-openapi/inflect
 # github.com/go-openapi/jsonpointer v0.19.5
 github.com/go-openapi/jsonpointer
 # github.com/go-openapi/jsonreference v0.19.6
 github.com/go-openapi/jsonreference
 # github.com/go-openapi/loads v0.20.2
+## explicit
 github.com/go-openapi/loads
-github.com/go-openapi/loads/fmts
 # github.com/go-openapi/runtime v0.19.29
+## explicit
 github.com/go-openapi/runtime
 github.com/go-openapi/runtime/client
+github.com/go-openapi/runtime/flagext
 github.com/go-openapi/runtime/logger
 github.com/go-openapi/runtime/middleware
 github.com/go-openapi/runtime/middleware/denco
@@ -202,12 +203,16 @@ github.com/go-openapi/runtime/middleware/untyped
 github.com/go-openapi/runtime/security
 github.com/go-openapi/runtime/yamlpc
 # github.com/go-openapi/spec v0.20.3
+## explicit
 github.com/go-openapi/spec
 # github.com/go-openapi/strfmt v0.20.1
+## explicit
 github.com/go-openapi/strfmt
 # github.com/go-openapi/swag v0.19.15
+## explicit
 github.com/go-openapi/swag
 # github.com/go-openapi/validate v0.20.2
+## explicit
 github.com/go-openapi/validate
 # github.com/go-playground/locales v0.13.0
 github.com/go-playground/locales
@@ -220,14 +225,6 @@ github.com/go-playground/validator
 github.com/go-stack/stack
 # github.com/go-swagger/go-swagger v0.27.0
 ## explicit
-github.com/go-swagger/go-swagger/cmd/swagger
-github.com/go-swagger/go-swagger/cmd/swagger/commands
-github.com/go-swagger/go-swagger/cmd/swagger/commands/diff
-github.com/go-swagger/go-swagger/cmd/swagger/commands/generate
-github.com/go-swagger/go-swagger/cmd/swagger/commands/initcmd
-github.com/go-swagger/go-swagger/codescan
-github.com/go-swagger/go-swagger/generator
-github.com/go-swagger/go-swagger/scan
 # github.com/gogo/protobuf v1.3.2
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
@@ -298,8 +295,6 @@ github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
 github.com/googleapis/gnostic/jsonschema
 github.com/googleapis/gnostic/openapiv2
-# github.com/gorilla/handlers v1.5.1
-github.com/gorilla/handlers
 # github.com/grpc-ecosystem/grpc-gateway v1.16.0
 github.com/grpc-ecosystem/grpc-gateway/internal
 github.com/grpc-ecosystem/grpc-gateway/runtime
@@ -350,8 +345,6 @@ github.com/in-toto/in-toto-golang/pkg/ssl
 github.com/inconshreveable/mousetrap
 # github.com/jedisct1/go-minisign v0.0.0-20210703085342-c1f07ee84431
 github.com/jedisct1/go-minisign
-# github.com/jessevdk/go-flags v1.5.0
-github.com/jessevdk/go-flags
 # github.com/jmespath/go-jmespath v0.4.0
 github.com/jmespath/go-jmespath
 # github.com/josharian/intern v1.0.0
@@ -364,10 +357,6 @@ github.com/jstemmer/go-junit-report/formatter
 github.com/jstemmer/go-junit-report/parser
 # github.com/kelseyhightower/envconfig v1.4.0
 github.com/kelseyhightower/envconfig
-# github.com/kr/pretty v0.2.1
-github.com/kr/pretty
-# github.com/kr/text v0.2.0
-github.com/kr/text
 # github.com/leodido/go-urn v1.2.1
 github.com/leodido/go-urn
 # github.com/magiconair/properties v1.8.5
@@ -503,8 +492,10 @@ github.com/spf13/cobra
 # github.com/spf13/jwalterweatherman v1.1.0
 github.com/spf13/jwalterweatherman
 # github.com/spf13/pflag v1.0.5
+## explicit
 github.com/spf13/pflag
 # github.com/spf13/viper v1.8.1
+## explicit
 github.com/spf13/viper
 # github.com/subosito/gotenv v1.2.0
 github.com/subosito/gotenv
@@ -546,12 +537,8 @@ github.com/tektoncd/pipeline/pkg/reconciler/pipeline/dag
 github.com/tektoncd/pipeline/pkg/substitution
 # github.com/tektoncd/plumbing v0.0.0-20210514044347-f8a9689d5bd5
 ## explicit
-github.com/tektoncd/plumbing
-github.com/tektoncd/plumbing/scripts
 # github.com/theupdateframework/go-tuf v0.0.0-20210630170422-22a94818d17b
 github.com/theupdateframework/go-tuf/encrypted
-# github.com/toqueteos/webbrowser v1.2.0
-github.com/toqueteos/webbrowser
 # github.com/vdemeester/k8s-pkg-credentialprovider v1.19.7
 github.com/vdemeester/k8s-pkg-credentialprovider
 github.com/vdemeester/k8s-pkg-credentialprovider/aws
@@ -655,6 +642,7 @@ golang.org/x/mod/module
 golang.org/x/mod/semver
 golang.org/x/mod/sumdb/note
 # golang.org/x/net v0.0.0-20210716203947-853a461950ff
+## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
@@ -663,6 +651,7 @@ golang.org/x/net/http2/h2c
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
+golang.org/x/net/netutil
 golang.org/x/net/trace
 # golang.org/x/oauth2 v0.0.0-20210628180205-a41e5a781914
 golang.org/x/oauth2
@@ -698,14 +687,8 @@ golang.org/x/time/rate
 # golang.org/x/tools v0.1.5
 golang.org/x/tools/cmd/goimports
 golang.org/x/tools/go/ast/astutil
-golang.org/x/tools/go/buildutil
 golang.org/x/tools/go/gcexportdata
-golang.org/x/tools/go/internal/cgo
 golang.org/x/tools/go/internal/gcimporter
-golang.org/x/tools/go/internal/packagesdriver
-golang.org/x/tools/go/loader
-golang.org/x/tools/go/packages
-golang.org/x/tools/imports
 golang.org/x/tools/internal/event
 golang.org/x/tools/internal/event/core
 golang.org/x/tools/internal/event/keys
@@ -714,9 +697,7 @@ golang.org/x/tools/internal/fastwalk
 golang.org/x/tools/internal/gocommand
 golang.org/x/tools/internal/gopathwalk
 golang.org/x/tools/internal/imports
-golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/typeparams
-golang.org/x/tools/internal/typesinternal
 # golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
@@ -1213,19 +1194,8 @@ k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/code-generator v0.19.7
 ## explicit
-k8s.io/code-generator/cmd/deepcopy-gen
-k8s.io/code-generator/cmd/deepcopy-gen/args
-k8s.io/code-generator/pkg/util
 # k8s.io/component-base v0.19.7
 k8s.io/component-base/version
-# k8s.io/gengo v0.0.0-20201214224949-b6c5ce23f027
-k8s.io/gengo/args
-k8s.io/gengo/examples/deepcopy-gen/generators
-k8s.io/gengo/examples/set-gen/sets
-k8s.io/gengo/generator
-k8s.io/gengo/namer
-k8s.io/gengo/parser
-k8s.io/gengo/types
 # k8s.io/klog v1.0.0
 k8s.io/klog
 # k8s.io/klog/v2 v2.8.0

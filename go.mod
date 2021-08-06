@@ -6,7 +6,14 @@ require (
 	cloud.google.com/go v0.88.0
 	cloud.google.com/go/storage v1.16.0
 	github.com/ghodss/yaml v1.0.0
-	github.com/go-swagger/go-swagger v0.27.0
+	github.com/go-openapi/errors v0.20.0
+	github.com/go-openapi/loads v0.20.2
+	github.com/go-openapi/runtime v0.19.29
+	github.com/go-openapi/spec v0.20.3
+	github.com/go-openapi/strfmt v0.20.1
+	github.com/go-openapi/swag v0.19.15
+	github.com/go-openapi/validate v0.20.2
+	github.com/go-swagger/go-swagger v0.27.0 // indirect
 	github.com/google/go-cmp v0.5.6
 	github.com/google/go-containerregistry v0.5.1
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20210216200643-d81088d9983e
@@ -21,15 +28,18 @@ require (
 	github.com/sigstore/fulcio v0.1.1
 	github.com/sigstore/rekor v0.2.1-0.20210714185543-38d532d5c0b1
 	github.com/sigstore/sigstore v0.0.0-20210722023421-fd3b69438dba
+	github.com/spf13/pflag v1.0.5
+	github.com/spf13/viper v1.8.1
 	github.com/tektoncd/pipeline v0.25.0
-	github.com/tektoncd/plumbing v0.0.0-20210514044347-f8a9689d5bd5
+	github.com/tektoncd/plumbing v0.0.0-20210514044347-f8a9689d5bd5 // indirect
 	go.uber.org/zap v1.18.1
 	gocloud.dev v0.23.0
+	golang.org/x/net v0.0.0-20210716203947-853a461950ff
 	google.golang.org/api v0.50.0
 	k8s.io/api v0.21.3
 	k8s.io/apimachinery v0.21.3
 	k8s.io/client-go v0.21.3
-	k8s.io/code-generator v0.19.7
+	k8s.io/code-generator v0.19.7 // indirect
 	k8s.io/klog/v2 v2.8.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7 // indirect
 	knative.dev/pkg v0.0.0-20210510175900-4564797bf3b7

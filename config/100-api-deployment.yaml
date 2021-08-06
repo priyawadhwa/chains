@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tekton-chains-api
+  namespace: tekton-chains
+  labels:
+    app.kubernetes.io/component: chains
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tekton-chains-api
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      labels:
+        app: tekton-chains-api
+        app.kubernetes.io/name: tekton-pipelines
+        app.kubernetes.io/component: controller
+        # # tekton.dev/release value replaced with inputs.params.versionTag in pipeline/tekton/publish.yaml
+        # pipeline.tekton.dev/release: "devel"
+        version: "devel"
+    spec:
+      serviceAccountName: tekton-chains-controller
+      containers:
+        - name: tekton-chains-api
+          image: ko://github.com/tektoncd/chains/cmd/server
+          volumeMounts:
+            - mountPath: /tekton-chains-api/storage
+              name: tekton-chains-api
+      volumes:
+        - name: tekton-chains-api
+          persistentVolumeClaim:
+            claimName: tekton-chains-api
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tekton-chains-api
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tekton-chains-api
+  namespace: tekton-chains
+spec:
+  selector:
+    app: tekton-chains-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

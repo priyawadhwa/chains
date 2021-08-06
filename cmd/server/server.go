@@ -18,12 +18,12 @@ import (
 	"os"
 
 	"github.com/go-openapi/loads"
-	"github.com/spf13/viper"
 	"github.com/tektoncd/chains/pkg/server/generated/restapi"
 	"github.com/tektoncd/chains/pkg/server/generated/restapi/operations"
 )
 
 const (
+	host = "0.0.0.0"
 	port = 8080
 )
 
@@ -36,7 +36,7 @@ func main() {
 		}
 	}()
 
-	server.Host = viper.GetString("rekor_server.address")
+	server.Host = host
 	server.Port = port
 	server.EnabledListeners = []string{"http"}
 

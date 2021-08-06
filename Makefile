@@ -13,8 +13,9 @@
 # limitations under the License.
 
 
-OPENAPIDEPS = openapi.yaml $(shell find pkg/types -iname "*.json")
+OPENAPIDEPS = openapi.yaml
 
+GENSRC = pkg/generated/client/%.go pkg/generated/models/%.go pkg/generated/restapi/%.go
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 
@@ -26,13 +27,13 @@ SWAGGER := $(TOOLS_BIN_DIR)/swagger
 ## --------------------------------------
 
 
-$(GENSRC): $(SWAGGER) $(OPENAPIDEPS)
-	$(SWAGGER) generate client -f openapi.yaml -q -r COPYRIGHT.txt -t pkg/generated --default-consumes application/json\;q=1
-	$(SWAGGER) generate server -f openapi.yaml -q -r COPYRIGHT.txt -t pkg/generated --exclude-main -A rekor_server --exclude-spec --flag-strategy=pflag --default-produces application/json
-
 .PHONY: validate-openapi
 validate-openapi: $(SWAGGER)
 	$(SWAGGER) validate openapi.yaml
+
+.PHONY: gen
+gen: $(SWAGGER) $(OPENAPIDEPS)
+	$(SWAGGER) generate server -f openapi.yaml -q -r hack/boilerplate/boilerplate.txt -t pkg/chains/generated --exclude-main -A chains-server --exclude-spec --flag-strategy=pflag --default-produces application/json
 
 $(SWAGGER): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR); go build -tags=tools -o $(TOOLS_BIN_DIR)/swagger github.com/go-swagger/go-swagger/cmd/swagger

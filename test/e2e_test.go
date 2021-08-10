@@ -25,11 +25,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/in-toto/in-toto-golang/pkg/ssl"
@@ -39,10 +37,6 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
-	"github.com/AlekSi/pointer"
-	"github.com/tektoncd/chains/pkg/api/generated/client"
-	"github.com/tektoncd/chains/pkg/api/generated/client/entry"
-	"github.com/tektoncd/chains/pkg/api/generated/models"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -417,26 +411,45 @@ var imageTaskRun = v1beta1.TaskRun{
 
 func TestAPIServer(t *testing.T) {
 	ctx := logtesting.TestContextWithLogger(t)
-	c, _, cleanup := setup(ctx, t, setupOpts{forwardAPIServer: true, ns: "default"})
+	c, ns, cleanup := setup(ctx, t, setupOpts{})
 	defer cleanup()
 
-	// try to store something
-	e := &models.Entry{
-		PodName:   pointer.ToString("mypod"),
-		Signature: pointer.ToString("mysignature"),
-		Svid:      pointer.ToString("mysvid"),
-	}
-	cfg := client.DefaultTransportConfig().WithHost(c.chainsAPIServer)
-	apiClient := client.NewHTTPClientWithConfig(strfmt.Default, cfg)
-	if _, err := apiClient.Entry.AddEntry(&entry.AddEntryParams{Query: e}); err != nil {
-		t.Fatal(err)
-	}
-	// try to retrieve it
-	got, err := apiClient.Entry.GetEntry(&entry.GetEntryParams{PodName: "mypod"})
+	tr, err := c.PipelineClient.TektonV1beta1().TaskRuns(ns).Create(ctx, apiserverTaskRun(), metav1.CreateOptions{})
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("error creating taskrun: %s", err)
 	}
-	if !reflect.DeepEqual(e, got) {
-		t.Fatalf("expected %v got %v", e, got)
+	t.Logf("Created TaskRun: %s", tr.Name)
+
+	// Give it a minute to complete.
+	waitForCondition(ctx, t, c.PipelineClient, tr.Name, ns, successful, 60*time.Second)
+}
+
+func apiserverTaskRun() *v1beta1.TaskRun {
+	script := `set -ex
+apt-get update
+apt-get install -y curl
+curl -X POST -H 'Content-Type: application/json' --data '{"podName":"%s","signature":"sig","svid":"cert"}' tekton-chains-api.tekton-chains.svc.cluster.local/api/v1/entry/
+curl tekton-chains-api.tekton-chains.svc.cluster.local/api/v1/entry/%s
+`
+	podName := fmt.Sprintf("mypod-%d", time.Now().Unix())
+	script = fmt.Sprintf(script, podName, podName)
+
+	return &v1beta1.TaskRun{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "apiserver-task",
+		},
+		Spec: v1beta1.TaskRunSpec{
+			TaskSpec: &v1beta1.TaskSpec{
+				Steps: []v1beta1.Step{
+					{
+						Container: corev1.Container{
+							Name:  "curl",
+							Image: "ubuntu",
+						},
+						Script: script,
+					},
+				},
+			},
+		},
 	}
 }

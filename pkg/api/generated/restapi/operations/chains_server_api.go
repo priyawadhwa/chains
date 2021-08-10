@@ -33,6 +33,7 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
+	pkgapi "github.com/tektoncd/chains/pkg/api"
 
 	"github.com/tektoncd/chains/pkg/api/generated/restapi/operations/entry"
 )
@@ -59,12 +60,8 @@ func NewChainsServerAPI(spec *loads.Document) *ChainsServerAPI {
 
 		JSONProducer: runtime.JSONProducer(),
 
-		EntryAddEntryHandler: entry.AddEntryHandlerFunc(func(params entry.AddEntryParams) middleware.Responder {
-			return middleware.NotImplemented("operation entry.AddEntry has not yet been implemented")
-		}),
-		EntryGetEntryHandler: entry.GetEntryHandlerFunc(func(params entry.GetEntryParams) middleware.Responder {
-			return middleware.NotImplemented("operation entry.GetEntry has not yet been implemented")
-		}),
+		EntryAddEntryHandler: entry.AddEntryHandlerFunc(pkgapi.AddEntryHandler),
+		EntryGetEntryHandler: entry.GetEntryHandlerFunc(pkgapi.GetEntryHandler),
 	}
 }
 

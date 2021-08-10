@@ -84,6 +84,10 @@ func waitForCondition(ctx context.Context, t *testing.T, c pipelineclientset.Int
 	}
 }
 
+func successful(tr *v1beta1.TaskRun) bool {
+	return tr.IsSuccessful()
+}
+
 func done(tr *v1beta1.TaskRun) bool {
 	return tr.IsDone()
 }

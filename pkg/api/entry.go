@@ -16,6 +16,7 @@ package api
 
 import (
 	"io/ioutil"
+	"log"
 	"path/filepath"
 
 	"github.com/go-openapi/runtime/middleware"
@@ -25,16 +26,20 @@ import (
 )
 
 func GetEntryHandler(params entry.GetEntryParams) middleware.Responder {
+	log.Print("Getting entry...")
 	e, err := getEntry(params.PodName)
 	if err != nil {
-		return entry.NewGetEntryDefault(1).WithPayload(&models.Error{Message: err.Error()})
+		log.Printf("error getting entry for %s: %v", params.PodName, err)
+		return entry.NewGetEntryDefault(400).WithPayload(&models.Error{Message: err.Error()})
 	}
 	return entry.NewGetEntryOK().WithPayload(e)
 }
 
 func AddEntryHandler(params entry.AddEntryParams) middleware.Responder {
+	log.Print("Addding entry...")
 	if err := addEntry(params.Query); err != nil {
-		return entry.NewAddEntryDefault(1).WithPayload(&models.Error{Message: err.Error()})
+		log.Printf("error adding entry for %s: %v", *params.Query.PodName, err)
+		return entry.NewAddEntryDefault(400).WithPayload(&models.Error{Message: err.Error()})
 	}
 	return entry.NewAddEntryOK()
 }

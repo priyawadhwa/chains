@@ -22,6 +22,8 @@ spec:
         # pipeline.tekton.dev/release: "devel"
         version: "devel"
     spec:
+      securityContext:
+        fsGroup: 2000 
       serviceAccountName: tekton-chains-controller
       containers:
         - name: tekton-chains-api
@@ -38,7 +40,9 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: tekton-chains-api
+  namespace: tekton-chains
 spec:
+  storageClassName: standard-rwo
   accessModes:
     - ReadWriteOnce
   resources:

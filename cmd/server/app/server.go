@@ -50,6 +50,7 @@ var rootCmd = &cobra.Command{
 		server.ConfigureAPI()
 		api.ConfigureAPI()
 
+		log.Print("Starting server...")
 		if err := server.Serve(); err != nil {
 			fmt.Println(err)
 			os.Exit(1)

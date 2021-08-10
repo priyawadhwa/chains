@@ -25,9 +25,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/go-openapi/strfmt"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/in-toto/in-toto-golang/pkg/ssl"
@@ -37,6 +39,10 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
+	"github.com/AlekSi/pointer"
+	"github.com/tektoncd/chains/pkg/api/generated/client"
+	"github.com/tektoncd/chains/pkg/api/generated/client/entry"
+	"github.com/tektoncd/chains/pkg/api/generated/models"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -407,4 +413,25 @@ var imageTaskRun = v1beta1.TaskRun{
 			},
 		},
 	},
+}
+
+func TestAPIServer(t *testing.T) {
+	// try to store something
+	e := &models.Entry{
+		PodName:   pointer.ToString("mypod"),
+		Signature: pointer.ToString("mysignature"),
+		Svid:      pointer.ToString("mysvid"),
+	}
+	c := client.NewHTTPClient(strfmt.Default)
+	if _, err := c.Entry.AddEntry(&entry.AddEntryParams{Query: e}); err != nil {
+		t.Fatal(err)
+	}
+	// try to retrieve it
+	got, err := c.Entry.GetEntry(&entry.GetEntryParams{PodName: "mypod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(e, got) {
+		t.Fatalf("expected %v got %v", e, got)
+	}
 }

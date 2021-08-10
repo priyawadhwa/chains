@@ -30,7 +30,7 @@ import (
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/go-openapi/validate"
 
-	"github.com/tektoncd/chains/pkg/server/generated/models"
+	"github.com/tektoncd/chains/pkg/api/generated/models"
 )
 
 // NewAddEntryParams creates a new AddEntryParams object

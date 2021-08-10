@@ -34,7 +34,7 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 
-	"github.com/tektoncd/chains/pkg/server/generated/restapi/operations/entry"
+	"github.com/tektoncd/chains/pkg/api/generated/restapi/operations/entry"
 )
 
 // NewChainsServerAPI creates a new ChainsServer instance

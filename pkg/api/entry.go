@@ -20,12 +20,8 @@ import (
 
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/pkg/errors"
-	"github.com/tektoncd/chains/pkg/server/generated/models"
-	"github.com/tektoncd/chains/pkg/server/generated/restapi/operations/entry"
-)
-
-const (
-	fp = "/tekton-chains-api/storage"
+	"github.com/tektoncd/chains/pkg/api/generated/models"
+	"github.com/tektoncd/chains/pkg/api/generated/restapi/operations/entry"
 )
 
 func GetEntryHandler(params entry.GetEntryParams) middleware.Responder {
@@ -44,7 +40,7 @@ func AddEntryHandler(params entry.AddEntryParams) middleware.Responder {
 }
 
 func getEntry(podName string) (*models.Entry, error) {
-	f := filepath.Join(fp, podName)
+	f := filepath.Join(api.storagePath, podName)
 	contents, err := ioutil.ReadFile(f)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting entry for %s", podName)
@@ -60,7 +56,7 @@ func addEntry(e *models.Entry) error {
 	if e == nil {
 		return nil
 	}
-	f := filepath.Join(fp, *e.PodName)
+	f := filepath.Join(api.storagePath, *e.PodName)
 	contents, err := e.MarshalBinary()
 	if err != nil {
 		return errors.Wrap(err, "marshal binary")

@@ -24,9 +24,9 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 
-	pkgapi "github.com/tektoncd/chains/pkg/server/api"
-	"github.com/tektoncd/chains/pkg/server/generated/restapi/operations"
-	"github.com/tektoncd/chains/pkg/server/generated/restapi/operations/entry"
+	pkgapi "github.com/tektoncd/chains/pkg/api"
+	"github.com/tektoncd/chains/pkg/api/generated/restapi/operations"
+	"github.com/tektoncd/chains/pkg/api/generated/restapi/operations/entry"
 )
 
 //go:generate swagger generate server --target ../../generated --name ChainsServer --spec ../../../../openapi.yaml --principal interface{} --exclude-main

@@ -5,6 +5,7 @@ go 1.16
 require (
 	cloud.google.com/go v0.88.0
 	cloud.google.com/go/storage v1.16.0
+	github.com/AlekSi/pointer v1.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-openapi/errors v0.20.0
 	github.com/go-openapi/loads v0.20.2
@@ -28,6 +29,7 @@ require (
 	github.com/sigstore/fulcio v0.1.1
 	github.com/sigstore/rekor v0.2.1-0.20210714185543-38d532d5c0b1
 	github.com/sigstore/sigstore v0.0.0-20210722023421-fd3b69438dba
+	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
 	github.com/tektoncd/pipeline v0.25.0

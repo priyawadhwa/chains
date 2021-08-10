@@ -25,6 +25,9 @@ contrib.go.opencensus.io/exporter/stackdriver
 contrib.go.opencensus.io/exporter/stackdriver/monitoredresource
 contrib.go.opencensus.io/exporter/stackdriver/monitoredresource/aws
 contrib.go.opencensus.io/exporter/stackdriver/monitoredresource/gcp
+# github.com/AlekSi/pointer v1.1.0
+## explicit
+github.com/AlekSi/pointer
 # github.com/Azure/azure-sdk-for-go v55.7.0+incompatible => github.com/Azure/azure-sdk-for-go v55.0.0+incompatible
 github.com/Azure/azure-sdk-for-go/services/containerregistry/mgmt/2019-05-01/containerregistry
 github.com/Azure/azure-sdk-for-go/services/keyvault/auth
@@ -488,6 +491,7 @@ github.com/spf13/afero/mem
 # github.com/spf13/cast v1.3.1
 github.com/spf13/cast
 # github.com/spf13/cobra v1.2.1
+## explicit
 github.com/spf13/cobra
 # github.com/spf13/jwalterweatherman v1.1.0
 github.com/spf13/jwalterweatherman

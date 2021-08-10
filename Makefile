@@ -15,7 +15,6 @@
 
 OPENAPIDEPS = openapi.yaml
 
-GENSRC = pkg/generated/client/%.go pkg/generated/models/%.go pkg/generated/restapi/%.go
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 
@@ -32,8 +31,9 @@ validate-openapi: $(SWAGGER)
 	$(SWAGGER) validate openapi.yaml
 
 .PHONY: gen
-gen: $(SWAGGER) $(OPENAPIDEPS)
-	$(SWAGGER) generate server -f openapi.yaml -q -r hack/boilerplate/boilerplate.txt -t pkg/server/generated --exclude-main -A chains-server --exclude-spec --flag-strategy=pflag --default-produces application/json
+gen: $(OPENAPIDEPS)
+    $(SWAGGER) generate client -f openapi.yaml -q -r hack/boilerplate/boilerplate.txt -t pkg/api/generated --default-consumes application/json\;q=1
+	$(SWAGGER) generate server -f openapi.yaml -q -r hack/boilerplate/boilerplate.txt -t pkg/api/generated --exclude-main -A chains-server --exclude-spec --flag-strategy=pflag --default-produces application/json
 
 $(SWAGGER): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR); go build -tags=tools -o $(TOOLS_BIN_DIR)/swagger github.com/go-swagger/go-swagger/cmd/swagger

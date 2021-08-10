@@ -25,7 +25,7 @@ import (
 
 	"github.com/go-openapi/runtime"
 
-	"github.com/tektoncd/chains/pkg/server/generated/models"
+	"github.com/tektoncd/chains/pkg/api/generated/models"
 )
 
 // GetEntryOKCode is the HTTP code returned for type GetEntryOK

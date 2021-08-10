@@ -63,6 +63,7 @@ type clients struct {
 	// external is accessible from outside the cluster via port-forwarding
 	internalRegistry string
 	externalRegistry string
+	chainsAPIServer  string
 }
 
 // newClients instantiates and returns several clientsets required for making requests to the
@@ -90,9 +91,10 @@ func newClients(t *testing.T, configPath, clusterName string) *clients {
 }
 
 type setupOpts struct {
-	useCosignSigner bool
-	registry        bool
-	ns              string
+	useCosignSigner  bool
+	registry         bool
+	forwardAPIServer bool
+	ns               string
 }
 
 func setup(ctx context.Context, t *testing.T, opts setupOpts) (*clients, string, func()) {
@@ -110,6 +112,10 @@ func setup(ctx context.Context, t *testing.T, opts setupOpts) (*clients, string,
 		internalRegistry, svc := createRegistry(ctx, t, namespace, c.KubeClient)
 		externalRegistry := portForward(ctx, t, svc)
 		c.internalRegistry, c.externalRegistry = internalRegistry, externalRegistry
+	}
+
+	if opts.forwardAPIServer {
+		c.chainsAPIServer = forwardAPIServer(ctx, t, c)
 	}
 
 	var cleanup = func() {
@@ -192,6 +198,14 @@ func createRegistry(ctx context.Context, t *testing.T, namespace string, kubeCli
 	}
 
 	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", service.Name, service.Namespace), service
+}
+
+func forwardAPIServer(ctx context.Context, t *testing.T, c *clients) string {
+	svc, err := c.KubeClient.CoreV1().Services("tekton-chains").Get(ctx, "tekton-chains-api", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return portForward(ctx, t, svc)
 }
 
 func portForward(ctx context.Context, t *testing.T, svc *corev1.Service) string {

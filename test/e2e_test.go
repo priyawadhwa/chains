@@ -416,18 +416,23 @@ var imageTaskRun = v1beta1.TaskRun{
 }
 
 func TestAPIServer(t *testing.T) {
+	ctx := logtesting.TestContextWithLogger(t)
+	c, _, cleanup := setup(ctx, t, setupOpts{forwardAPIServer: true, ns: "default"})
+	defer cleanup()
+
 	// try to store something
 	e := &models.Entry{
 		PodName:   pointer.ToString("mypod"),
 		Signature: pointer.ToString("mysignature"),
 		Svid:      pointer.ToString("mysvid"),
 	}
-	c := client.NewHTTPClient(strfmt.Default)
-	if _, err := c.Entry.AddEntry(&entry.AddEntryParams{Query: e}); err != nil {
+	cfg := client.DefaultTransportConfig().WithHost(c.chainsAPIServer)
+	apiClient := client.NewHTTPClientWithConfig(strfmt.Default, cfg)
+	if _, err := apiClient.Entry.AddEntry(&entry.AddEntryParams{Query: e}); err != nil {
 		t.Fatal(err)
 	}
 	// try to retrieve it
-	got, err := c.Entry.GetEntry(&entry.GetEntryParams{PodName: "mypod"})
+	got, err := apiClient.Entry.GetEntry(&entry.GetEntryParams{PodName: "mypod"})
 	if err != nil {
 		t.Fatal(err)
 	}

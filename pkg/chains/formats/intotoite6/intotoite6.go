@@ -21,29 +21,30 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/in-toto/in-toto-golang/in_toto"
 	intoto "github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/tektoncd/chains/pkg/chains/formats"
+	"github.com/tektoncd/chains/pkg/chains/formats/provenance"
 	"github.com/tektoncd/chains/pkg/config"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
-
-	"github.com/google/go-containerregistry/pkg/name"
+	"go.uber.org/zap"
 )
 
 const (
-	tektonID           = "https://tekton.dev/attestations/chains@v1"
-	commitParam        = "CHAINS-GIT_COMMIT"
-	urlParam           = "CHAINS-GIT_URL"
-	ociDigestResult    = "IMAGE_DIGEST"
-	chainsDigestSuffix = "_DIGEST"
+	tektonID    = "https://tekton.dev/attestations/chains@v1"
+	commitParam = "CHAINS-GIT_COMMIT"
+	urlParam    = "CHAINS-GIT_URL"
 )
 
 type InTotoIte6 struct {
 	builderID string
+	logger    *zap.SugaredLogger
 }
 
-func NewFormatter(cfg config.Config) (formats.Payloader, error) {
-	return &InTotoIte6{builderID: cfg.Builder.ID}, nil
+func NewFormatter(cfg config.Config, logger *zap.SugaredLogger) (formats.Payloader, error) {
+	return &InTotoIte6{
+		builderID: cfg.Builder.ID,
+		logger:    logger,
+	}, nil
 }
 
 func (i *InTotoIte6) Wrap() bool {
@@ -73,46 +74,39 @@ func (i *InTotoIte6) CreatePayload(obj interface{}) (interface{}, error) {
 // 	tekton-chains -> Recipe.type
 // 	Taskname -> Recipe.entry_point
 func (i *InTotoIte6) generateAttestationFromTaskRun(tr *v1beta1.TaskRun) (interface{}, error) {
-	name := tr.Name
-	if tr.Spec.TaskRef != nil {
-		name = tr.Spec.TaskRef.Name
-	}
 	att := intoto.ProvenanceStatement{
 		StatementHeader: intoto.StatementHeader{
 			Type:          intoto.StatementInTotoV01,
 			PredicateType: intoto.PredicateSLSAProvenanceV01,
+			Subject:       provenance.GetSubjectDigests(tr, i.logger),
 		},
 		Predicate: intoto.ProvenancePredicate{
-			Metadata: &in_toto.ProvenanceMetadata{},
+			Metadata:  metadata(tr),
+			Materials: materials(tr),
 			Builder: intoto.ProvenanceBuilder{
 				ID: i.builderID,
 			},
-			Recipe: intoto.ProvenanceRecipe{
-				Type:       tektonID,
-				EntryPoint: name,
-			},
+			Recipe: recipe(tr),
 		},
 	}
-	if tr.Status.StartTime != nil {
-		att.Predicate.Metadata.BuildStartedOn = &tr.Status.StartTime.Time
-	}
-	if tr.Status.CompletionTime != nil {
-		att.Predicate.Metadata.BuildFinishedOn = &tr.Status.CompletionTime.Time
-	}
-
-	att.StatementHeader.Subject = getSubjectDigests(tr)
-
-	definedInMaterial, mats := materials(tr)
-	att.Predicate.Materials = mats
-	att.Predicate.Recipe.DefinedInMaterial = definedInMaterial
 
 	return att, nil
 }
 
+func metadata(tr *v1beta1.TaskRun) *intoto.ProvenanceMetadata {
+	m := &intoto.ProvenanceMetadata{}
+	if tr.Status.StartTime != nil {
+		m.BuildStartedOn = &tr.Status.StartTime.Time
+	}
+	if tr.Status.CompletionTime != nil {
+		m.BuildFinishedOn = &tr.Status.CompletionTime.Time
+	}
+	return m
+}
+
 // materials will add the following to the attestation materials:
-// 1. All step containers
-// 2. Any specification for git
-func materials(tr *v1beta1.TaskRun) (*int, []intoto.ProvenanceMaterial) {
+// 1. Any specification for git
+func materials(tr *v1beta1.TaskRun) []intoto.ProvenanceMaterial {
 	var m []intoto.ProvenanceMaterial
 	gitCommit, gitURL := gitInfo(tr)
 
@@ -123,30 +117,37 @@ func materials(tr *v1beta1.TaskRun) (*int, []intoto.ProvenanceMaterial) {
 			Digest: map[string]string{"git_commit": gitCommit},
 		})
 	}
-	// Add all found step containers as materials
-	for _, trs := range tr.Status.Steps {
-		uri, alg, digest := getPackageURLDocker(trs.ImageID)
-		if uri == "" {
-			continue
-		}
-
-		m = append(m, intoto.ProvenanceMaterial{
-			URI:    uri,
-			Digest: intoto.DigestSet{alg: digest},
-		})
-	}
 	sort.Slice(m, func(i, j int) bool {
 		return m[i].URI <= m[j].URI
 	})
-	// find the index of the Git material, if it exists, in the newly sorted list
-	var definedInMaterial *int
-	for i, u := range m {
-		if u.URI == gitURL {
-			definedInMaterial = intP(i)
-			break
+	return m
+}
+
+type Step struct {
+	Container  interface{} `json:"container"`
+	Image      interface{} `json:"image"`
+	Entrypoint string      `json:"entryPoint"`
+}
+
+func recipe(tr *v1beta1.TaskRun) intoto.ProvenanceRecipe {
+
+	var steps []Step
+	for _, s := range provenance.Steps(tr) {
+		env, ok := s.Environment.(map[string]interface{})
+		if !ok {
+			continue
 		}
+		steps = append(steps, Step{
+			Container:  env["container"],
+			Image:      env["image"],
+			Entrypoint: s.EntryPoint,
+		})
 	}
-	return definedInMaterial, m
+	return intoto.ProvenanceRecipe{
+		Type:        tektonID,
+		Arguments:   provenance.Params(tr),
+		Environment: steps,
+	}
 }
 
 func (i *InTotoIte6) Type() formats.PayloadType {
@@ -171,122 +172,4 @@ func gitInfo(tr *v1beta1.TaskRun) (commit string, url string) {
 		}
 	}
 	return
-}
-
-// getSubjectDigests depends on taskResults with names ending with
-// _DIGEST.
-// To be able to find the resource that matches the digest, it relies on a
-// naming schema for an input parameter.
-// If the output result from this task is foo_DIGEST, it expects to find an
-// parameter named 'foo', and resolves this value to use for the subject with
-// for the found digest.
-// If no parameter is found, we search the results of this task, which allows
-// for a task to create a random resource not known prior to execution that
-// gets checksummed and added as the subject.
-// Digests can be on two formats: $alg:$digest (commonly used for container
-// image hashes), or $alg:$digest $path, which is used when a step is
-// calculating a hash of a previous step.
-func getSubjectDigests(tr *v1beta1.TaskRun) []intoto.Subject {
-	var subjects []intoto.Subject
-
-	for _, trr := range tr.Status.TaskRunResults {
-		if !strings.HasSuffix(trr.Name, chainsDigestSuffix) {
-			continue
-		}
-		potentialKey := strings.TrimSuffix(trr.Name, chainsDigestSuffix)
-		var sub string
-		// try to match the key to a param or a result
-		for _, p := range tr.Spec.Params {
-			if potentialKey != p.Name || p.Value.Type != v1beta1.ParamTypeString {
-				continue
-			}
-			sub = p.Value.StringVal
-		}
-		for _, p := range tr.Status.TaskRunResults {
-			if potentialKey == p.Name {
-				sub = strings.TrimRight(p.Value, "\n")
-			}
-		}
-		// if we couldn't match to a param or a result, continue
-		if sub == "" {
-			continue
-		}
-		// Value should be of the format:
-		//   alg:hash
-		//   alg:hash filename
-		algHash := strings.Split(trr.Value, " ")[0]
-		ah := strings.Split(algHash, ":")
-		if len(ah) != 2 {
-			continue
-		}
-		alg := ah[0]
-		hash := ah[1]
-
-		// OCI image shall use pacakge url format for subjects
-		if trr.Name == ociDigestResult {
-			imageID := getOCIImageID(sub, alg, hash)
-			sub, _, _ = getPackageURLDocker(imageID)
-		}
-		subjects = append(subjects, intoto.Subject{
-			Name: sub,
-			Digest: map[string]string{
-				alg: hash,
-			},
-		})
-	}
-	sort.Slice(subjects, func(i, j int) bool {
-		return subjects[i].Name <= subjects[j].Name
-	})
-	return subjects
-}
-
-func intP(i int) *int {
-	return &i
-}
-
-// getPackageURLDocker takes an image id and creates a package URL string
-// based from it.
-// https://github.com/package-url/purl-spec
-func getPackageURLDocker(imageID string) (string, string, string) {
-	// Default registry per purl spec
-	const defaultRegistry = "hub.docker.com"
-
-	// imageID formats: name@alg:digest
-	//                  schema://name@alg:digest
-	d := strings.Split(imageID, "//")
-	if len(d) == 2 {
-		// Get away with schema
-		imageID = d[1]
-	}
-
-	digest, err := name.NewDigest(imageID, name.WithDefaultRegistry(defaultRegistry))
-	if err != nil {
-		return "", "", ""
-	}
-
-	// DigestStr() is alg:digest
-	parts := strings.Split(digest.DigestStr(), ":")
-	if len(parts) != 2 {
-		return "", "", ""
-	}
-
-	purl := fmt.Sprintf("pkg:docker/%s@%s",
-		digest.Context().RepositoryStr(),
-		digest.DigestStr(),
-	)
-
-	// Only inlude registry if it's not the default
-	registry := digest.Context().Registry.Name()
-	if registry != defaultRegistry {
-		purl = fmt.Sprintf("%s?repository_url=%s", purl, registry)
-	}
-
-	return purl, parts[0], parts[1]
-}
-
-// getOCIImageID generates an imageID that is compatible imageID field in
-// the task result's status field.
-func getOCIImageID(name, alg, digest string) string {
-	// image id is: docker://name@alg:digest
-	return fmt.Sprintf("docker://%s@%s:%s", name, alg, digest)
 }

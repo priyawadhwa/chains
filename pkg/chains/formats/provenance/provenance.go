@@ -66,7 +66,7 @@ func (i *Provenance) CreatePayload(obj interface{}) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("intoto does not support type: %s", v)
 	}
-	subjects := getSubjectDigests(tr, i.logger)
+	subjects := GetSubjectDigests(tr, i.logger)
 	att, err := i.generateProvenanceFromSubject(tr, subjects)
 	if err != nil {
 		return nil, errors.Wrapf(err, "generating provenance for subject %s", subjects)
@@ -86,7 +86,7 @@ func (i *Provenance) generateProvenanceFromSubject(tr *v1beta1.TaskRun, subjects
 	pred := provenance.ProvenancePredicate{
 		Metadata:   metadata(tr),
 		Invocation: invocation(i.builderID, tr),
-		Materials:  materials(tr),
+		Materials:  Materials(tr),
 		Recipe:     recipe(tr),
 	}
 
@@ -112,7 +112,7 @@ func metadata(tr *v1beta1.TaskRun) provenance.ProvenanceMetadata {
 }
 
 // add any Git specification to materials
-func materials(tr *v1beta1.TaskRun) []provenance.ProvenanceMaterial {
+func Materials(tr *v1beta1.TaskRun) []provenance.ProvenanceMaterial {
 	var mats []provenance.ProvenanceMaterial
 	gitCommit, gitURL := gitInfo(tr)
 
@@ -169,7 +169,14 @@ func invocation(builderID string, tr *v1beta1.TaskRun) provenance.Invocation {
 	invocation := provenance.Invocation{
 		EventID: string(tr.UID),
 	}
+	invocation.Parameters = Params(tr)
+	// get URI
+	invocation.RecipeURI = recipeURI(tr)
+	invocation.ID = builderID
+	return invocation
+}
 
+func Params(tr *v1beta1.TaskRun) []string {
 	// get parameters
 	var params []string
 	for _, p := range tr.Spec.Params {
@@ -187,13 +194,7 @@ func invocation(builderID string, tr *v1beta1.TaskRun) provenance.Invocation {
 			}
 		}
 	}
-
-	invocation.Parameters = params
-
-	// get URI
-	invocation.RecipeURI = recipeURI(tr)
-	invocation.ID = builderID
-	return invocation
+	return params
 }
 
 // This would be nil for an "inline task", a URI for the Task definition itself
@@ -221,6 +222,10 @@ func recipeURI(tr *v1beta1.TaskRun) string {
 }
 
 func recipe(tr *v1beta1.TaskRun) provenance.ProvenanceRecipe {
+	return provenance.ProvenanceRecipe{Steps: Steps(tr)}
+}
+
+func Steps(tr *v1beta1.TaskRun) []provenance.RecipeStep {
 	steps := []provenance.RecipeStep{}
 
 	for _, step := range tr.Status.Steps {
@@ -244,7 +249,7 @@ func recipe(tr *v1beta1.TaskRun) provenance.ProvenanceRecipe {
 		// append to all of the steps
 		steps = append(steps, s)
 	}
-	return provenance.ProvenanceRecipe{Steps: steps}
+	return steps
 }
 
 func container(stepState v1beta1.StepState, tr *v1beta1.TaskRun) v1beta1.Step {
@@ -308,7 +313,7 @@ func gitInfo(tr *v1beta1.TaskRun) (commit string, url string) {
 // Digests can be on two formats: $alg:$digest (commonly used for container
 // image hashes), or $alg:$digest $path, which is used when a step is
 // calculating a hash of a previous step.
-func getSubjectDigests(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) []in_toto.Subject {
+func GetSubjectDigests(tr *v1beta1.TaskRun, logger *zap.SugaredLogger) []in_toto.Subject {
 	var subjects []in_toto.Subject
 
 	imgs := artifacts.ExtractOCIImagesFromResults(tr, logger)

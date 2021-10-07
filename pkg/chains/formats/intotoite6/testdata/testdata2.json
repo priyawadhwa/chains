@@ -1,0 +1,54 @@
+{
+    "spec": {
+      "params": [],
+      "taskRef": {
+        "name": "test-task",
+        "kind": "Task"
+      },
+      "serviceAccountName": "default"
+    },
+    "status": {
+      "conditions": [
+        {
+          "type": "Succeeded",
+          "status": "True",
+          "lastTransitionTime": "2021-03-29T09:50:15Z",
+          "reason": "Succeeded",
+          "message": "All Steps have completed executing"
+        }
+      ],
+      "podName": "test-pod-name",
+      "steps": [
+        {
+          "name": "step1",
+          "container": "step-step1",
+          "imageID": "docker-pullable://gcr.io/test1/test1@sha256:d4b63d3e24d6eef04a6dc0795cf8a73470688803d97c52cffa3c8d4efd3397b6",
+          "script": "myscript"
+        }
+      ],
+      "taskResults": [
+        {
+          "name": "IMAGE_DIGEST",
+          "value": "sha256:d4b63d3e24d6eef04a6dc0795cf8a73470688803d97c52cffa3c8d4efd3397b6"
+        },
+        {
+          "name": "IMAGE_URL",
+          "value": "gcr.io/my/image"
+        }
+      ],
+      "taskSpec": {
+        "params": [],
+        "results": [
+          {
+            "name": "IMAGE_DIGEST",
+            "description": "Digest of a file to push."
+          },
+          {
+            "name": "IMAGE_URL",
+            "description": "some calculated uri"
+          }
+        ]
+      }
+    }
+  }
+  

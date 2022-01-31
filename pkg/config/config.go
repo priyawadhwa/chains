@@ -32,6 +32,11 @@ type Config struct {
 	Signers      SignerConfigs
 	Builder      BuilderConfig
 	Transparency TransparencyConfig
+	SPIRE        SPIREConfig
+}
+
+type SPIREConfig struct {
+	Enabled bool
 }
 
 // ArtifactConfig contains the configuration for how to sign/store/format the signatures for each artifact type
@@ -127,6 +132,9 @@ const (
 	transparencyURLKey     = "transparency.url"
 
 	ChainsConfig = "chains-config"
+
+	// SPIRE config
+	spireEnabledKey = "spire.enabled"
 )
 
 func (artifact *Artifact) Enabled() bool {
@@ -193,6 +201,9 @@ func NewConfigFromMap(data map[string]string) (*Config, error) {
 
 		// Build config
 		asString(builderIDKey, &cfg.Builder.ID),
+
+		// SPIRE
+		asBool(spireEnabledKey, &cfg.SPIRE.Enabled),
 	); err != nil {
 		return nil, fmt.Errorf("failed to parse data: %w", err)
 	}

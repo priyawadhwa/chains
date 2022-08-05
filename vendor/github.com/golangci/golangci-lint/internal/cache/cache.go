@@ -58,7 +58,7 @@ func Open(dir string) (*Cache, error) {
 		return nil, err
 	}
 	if !info.IsDir() {
-		return nil, &os.PathError{Op: "open", Path: dir, Err: fmt.Errorf("not a directory")}
+		return nil, &os.PathError{Op: "open", Path: dir, Err: errors.New("not a directory")}
 	}
 	for i := 0; i < 256; i++ {
 		name := filepath.Join(dir, fmt.Sprintf("%02x", i))
@@ -257,7 +257,7 @@ const (
 // and to reduce the amount of disk activity caused by using
 // cache entries, used only updates the mtime if the current
 // mtime is more than an hour old. This heuristic eliminates
-// nearly all of the mtime updates that would otherwise happen,
+// nearly all the mtime updates that would otherwise happen,
 // while still keeping the mtimes useful for cache trimming.
 func (c *Cache) used(file string) error {
 	info, err := os.Stat(file)
@@ -311,7 +311,7 @@ func (c *Cache) trimSubdir(subdir string, cutoff time.Time) {
 	// Read all directory entries from subdir before removing
 	// any files, in case removing files invalidates the file offset
 	// in the directory scan. Also, ignore error from f.Readdirnames,
-	// because we don't care about reporting the error and we still
+	// because we don't care about reporting the error, and we still
 	// want to process any entries found before the error.
 	f, err := os.Open(subdir)
 	if err != nil {
@@ -504,7 +504,7 @@ func (c *Cache) copyFile(file io.ReadSeeker, out OutputID, size int64) error {
 	sum := h.Sum(nil)
 	if !bytes.Equal(sum, out[:]) {
 		_ = f.Truncate(0)
-		return fmt.Errorf("file content changed underfoot")
+		return errors.New("file content changed underfoot")
 	}
 
 	// Commit cache file entry.

@@ -1,4 +1,7 @@
+// Package unused contains code for finding unused code.
 package unused
+
+// TODO(dh): don't add instantiated types/methods to the graph. add the origin types/methods.
 
 import (
 	"fmt"
@@ -10,15 +13,16 @@ import (
 	"strings"
 
 	"honnef.co/go/tools/analysis/code"
-	"honnef.co/go/tools/analysis/facts"
+	"honnef.co/go/tools/analysis/facts/directives"
+	"honnef.co/go/tools/analysis/facts/generated"
 	"honnef.co/go/tools/analysis/lint"
 	"honnef.co/go/tools/analysis/report"
 	"honnef.co/go/tools/go/ast/astutil"
 	"honnef.co/go/tools/go/ir"
 	"honnef.co/go/tools/go/types/typeutil"
 	"honnef.co/go/tools/internal/passes/buildir"
-	"honnef.co/go/tools/unused/typemap"
 
+	"golang.org/x/exp/typeparams"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -61,6 +65,9 @@ var Debug io.Writer
     interfaces. if a method that implements an interface is defined on
     a pointer receiver, and the pointer type is never used, but the
     named type is, then we still want to mark the method as used.
+  - (2.5) all their type parameters. Unused type parameters are probably useless, but they're a brand new feature and we
+    don't want to introduce false positives because we couldn't anticipate some novel use-case.
+  - (2.6) all their type arguments
 
 - variables and constants use:
   - their types
@@ -77,6 +84,7 @@ var Debug io.Writer
   - (4.7) fields they access
   - (4.8) types of all instructions
   - (4.9) package-level variables they assign to iff in tests (sinks for benchmarks)
+  - (4.10) all their type parameters. See 2.5 for reasoning.
 
 - conversions use:
   - (5.1) when converting between two equivalent structs, the fields in
@@ -127,7 +135,6 @@ var Debug io.Writer
   - (9.7) variable _reads_ use variables, writes do not, except in tests
   - (9.8) runtime functions that may be called from user code via the compiler
 
-
 - const groups:
   (10.1) if one constant out of a block of constants is used, mark all
   of them used. a lot of the time, unused constants exist for the sake
@@ -143,6 +150,9 @@ var Debug io.Writer
   positives. Thus, we only accurately track fields of named struct
   types, and assume that unnamed struct types use all their fields.
 
+- type parameters use:
+  - (12.1) their constraint type
+
 */
 
 func assert(b bool) {
@@ -156,149 +166,222 @@ func assert(b bool) {
 // Functions defined in the Go runtime that may be called through
 // compiler magic or via assembly.
 var runtimeFuncs = map[string]bool{
-	// The first part of the list is copied from
-	// cmd/compile/internal/gc/builtin.go, var runtimeDecls
-	"newobject":            true,
-	"panicindex":           true,
-	"panicslice":           true,
-	"panicdivide":          true,
-	"panicmakeslicelen":    true,
-	"throwinit":            true,
-	"panicwrap":            true,
-	"gopanic":              true,
-	"gorecover":            true,
-	"goschedguarded":       true,
-	"printbool":            true,
-	"printfloat":           true,
-	"printint":             true,
-	"printhex":             true,
-	"printuint":            true,
-	"printcomplex":         true,
-	"printstring":          true,
-	"printpointer":         true,
-	"printiface":           true,
-	"printeface":           true,
-	"printslice":           true,
-	"printnl":              true,
-	"printsp":              true,
-	"printlock":            true,
-	"printunlock":          true,
-	"concatstring2":        true,
-	"concatstring3":        true,
-	"concatstring4":        true,
-	"concatstring5":        true,
-	"concatstrings":        true,
-	"cmpstring":            true,
-	"intstring":            true,
-	"slicebytetostring":    true,
-	"slicebytetostringtmp": true,
-	"slicerunetostring":    true,
-	"stringtoslicebyte":    true,
-	"stringtoslicerune":    true,
-	"slicecopy":            true,
-	"slicestringcopy":      true,
-	"decoderune":           true,
-	"countrunes":           true,
-	"convI2I":              true,
-	"convT16":              true,
-	"convT32":              true,
-	"convT64":              true,
-	"convTstring":          true,
-	"convTslice":           true,
-	"convT2E":              true,
-	"convT2Enoptr":         true,
-	"convT2I":              true,
-	"convT2Inoptr":         true,
-	"assertE2I":            true,
-	"assertE2I2":           true,
-	"assertI2I":            true,
-	"assertI2I2":           true,
-	"panicdottypeE":        true,
-	"panicdottypeI":        true,
-	"panicnildottype":      true,
-	"ifaceeq":              true,
-	"efaceeq":              true,
-	"fastrand":             true,
-	"makemap64":            true,
-	"makemap":              true,
-	"makemap_small":        true,
-	"mapaccess1":           true,
-	"mapaccess1_fast32":    true,
-	"mapaccess1_fast64":    true,
-	"mapaccess1_faststr":   true,
-	"mapaccess1_fat":       true,
-	"mapaccess2":           true,
-	"mapaccess2_fast32":    true,
-	"mapaccess2_fast64":    true,
-	"mapaccess2_faststr":   true,
-	"mapaccess2_fat":       true,
-	"mapassign":            true,
-	"mapassign_fast32":     true,
-	"mapassign_fast32ptr":  true,
-	"mapassign_fast64":     true,
-	"mapassign_fast64ptr":  true,
-	"mapassign_faststr":    true,
-	"mapiterinit":          true,
-	"mapdelete":            true,
-	"mapdelete_fast32":     true,
-	"mapdelete_fast64":     true,
-	"mapdelete_faststr":    true,
-	"mapiternext":          true,
-	"mapclear":             true,
-	"makechan64":           true,
-	"makechan":             true,
-	"chanrecv1":            true,
-	"chanrecv2":            true,
-	"chansend1":            true,
-	"closechan":            true,
-	"writeBarrier":         true,
-	"typedmemmove":         true,
-	"typedmemclr":          true,
-	"typedslicecopy":       true,
-	"selectnbsend":         true,
-	"selectnbrecv":         true,
-	"selectnbrecv2":        true,
-	"selectsetpc":          true,
-	"selectgo":             true,
-	"block":                true,
-	"makeslice":            true,
-	"makeslice64":          true,
-	"growslice":            true,
-	"memmove":              true,
-	"memclrNoHeapPointers": true,
-	"memclrHasPointers":    true,
-	"memequal":             true,
-	"memequal8":            true,
-	"memequal16":           true,
-	"memequal32":           true,
-	"memequal64":           true,
-	"memequal128":          true,
-	"int64div":             true,
-	"uint64div":            true,
-	"int64mod":             true,
-	"uint64mod":            true,
-	"float64toint64":       true,
-	"float64touint64":      true,
-	"float64touint32":      true,
-	"int64tofloat64":       true,
-	"uint64tofloat64":      true,
-	"uint32tofloat64":      true,
-	"complex128div":        true,
-	"racefuncenter":        true,
-	"racefuncenterfp":      true,
-	"racefuncexit":         true,
-	"raceread":             true,
-	"racewrite":            true,
-	"racereadrange":        true,
-	"racewriterange":       true,
-	"msanread":             true,
-	"msanwrite":            true,
-	"x86HasPOPCNT":         true,
-	"x86HasSSE41":          true,
-	"arm64HasATOMICS":      true,
+	// Copied from cmd/compile/internal/typecheck/builtin.go, var runtimeDecls
+	"newobject":               true,
+	"panicindex":              true,
+	"panicslice":              true,
+	"panicdivide":             true,
+	"panicmakeslicelen":       true,
+	"throwinit":               true,
+	"panicwrap":               true,
+	"gopanic":                 true,
+	"gorecover":               true,
+	"goschedguarded":          true,
+	"printbool":               true,
+	"printfloat":              true,
+	"printint":                true,
+	"printhex":                true,
+	"printuint":               true,
+	"printcomplex":            true,
+	"printstring":             true,
+	"printpointer":            true,
+	"printiface":              true,
+	"printeface":              true,
+	"printslice":              true,
+	"printnl":                 true,
+	"printsp":                 true,
+	"printlock":               true,
+	"printunlock":             true,
+	"concatstring2":           true,
+	"concatstring3":           true,
+	"concatstring4":           true,
+	"concatstring5":           true,
+	"concatstrings":           true,
+	"cmpstring":               true,
+	"intstring":               true,
+	"slicebytetostring":       true,
+	"slicebytetostringtmp":    true,
+	"slicerunetostring":       true,
+	"stringtoslicebyte":       true,
+	"stringtoslicerune":       true,
+	"slicecopy":               true,
+	"slicestringcopy":         true,
+	"decoderune":              true,
+	"countrunes":              true,
+	"convI2I":                 true,
+	"convT16":                 true,
+	"convT32":                 true,
+	"convT64":                 true,
+	"convTstring":             true,
+	"convTslice":              true,
+	"convT2E":                 true,
+	"convT2Enoptr":            true,
+	"convT2I":                 true,
+	"convT2Inoptr":            true,
+	"assertE2I":               true,
+	"assertE2I2":              true,
+	"assertI2I":               true,
+	"assertI2I2":              true,
+	"panicdottypeE":           true,
+	"panicdottypeI":           true,
+	"panicnildottype":         true,
+	"ifaceeq":                 true,
+	"efaceeq":                 true,
+	"fastrand":                true,
+	"makemap64":               true,
+	"makemap":                 true,
+	"makemap_small":           true,
+	"mapaccess1":              true,
+	"mapaccess1_fast32":       true,
+	"mapaccess1_fast64":       true,
+	"mapaccess1_faststr":      true,
+	"mapaccess1_fat":          true,
+	"mapaccess2":              true,
+	"mapaccess2_fast32":       true,
+	"mapaccess2_fast64":       true,
+	"mapaccess2_faststr":      true,
+	"mapaccess2_fat":          true,
+	"mapassign":               true,
+	"mapassign_fast32":        true,
+	"mapassign_fast32ptr":     true,
+	"mapassign_fast64":        true,
+	"mapassign_fast64ptr":     true,
+	"mapassign_faststr":       true,
+	"mapiterinit":             true,
+	"mapdelete":               true,
+	"mapdelete_fast32":        true,
+	"mapdelete_fast64":        true,
+	"mapdelete_faststr":       true,
+	"mapiternext":             true,
+	"mapclear":                true,
+	"makechan64":              true,
+	"makechan":                true,
+	"chanrecv1":               true,
+	"chanrecv2":               true,
+	"chansend1":               true,
+	"closechan":               true,
+	"writeBarrier":            true,
+	"typedmemmove":            true,
+	"typedmemclr":             true,
+	"typedslicecopy":          true,
+	"selectnbsend":            true,
+	"selectnbrecv":            true,
+	"selectnbrecv2":           true,
+	"selectsetpc":             true,
+	"selectgo":                true,
+	"block":                   true,
+	"makeslice":               true,
+	"makeslice64":             true,
+	"growslice":               true,
+	"memmove":                 true,
+	"memclrNoHeapPointers":    true,
+	"memclrHasPointers":       true,
+	"memequal":                true,
+	"memequal8":               true,
+	"memequal16":              true,
+	"memequal32":              true,
+	"memequal64":              true,
+	"memequal128":             true,
+	"int64div":                true,
+	"uint64div":               true,
+	"int64mod":                true,
+	"uint64mod":               true,
+	"float64toint64":          true,
+	"float64touint64":         true,
+	"float64touint32":         true,
+	"int64tofloat64":          true,
+	"uint64tofloat64":         true,
+	"uint32tofloat64":         true,
+	"complex128div":           true,
+	"racefuncenter":           true,
+	"racefuncenterfp":         true,
+	"racefuncexit":            true,
+	"raceread":                true,
+	"racewrite":               true,
+	"racereadrange":           true,
+	"racewriterange":          true,
+	"msanread":                true,
+	"msanwrite":               true,
+	"x86HasPOPCNT":            true,
+	"x86HasSSE41":             true,
+	"arm64HasATOMICS":         true,
+	"mallocgc":                true,
+	"panicshift":              true,
+	"panicmakeslicecap":       true,
+	"goPanicIndex":            true,
+	"goPanicIndexU":           true,
+	"goPanicSliceAlen":        true,
+	"goPanicSliceAlenU":       true,
+	"goPanicSliceAcap":        true,
+	"goPanicSliceAcapU":       true,
+	"goPanicSliceB":           true,
+	"goPanicSliceBU":          true,
+	"goPanicSlice3Alen":       true,
+	"goPanicSlice3AlenU":      true,
+	"goPanicSlice3Acap":       true,
+	"goPanicSlice3AcapU":      true,
+	"goPanicSlice3B":          true,
+	"goPanicSlice3BU":         true,
+	"goPanicSlice3C":          true,
+	"goPanicSlice3CU":         true,
+	"goPanicSliceConvert":     true,
+	"printuintptr":            true,
+	"convT":                   true,
+	"convTnoptr":              true,
+	"makeslicecopy":           true,
+	"unsafeslicecheckptr":     true,
+	"panicunsafeslicelen":     true,
+	"panicunsafeslicenilptr":  true,
+	"unsafestringcheckptr":    true,
+	"panicunsafestringlen":    true,
+	"panicunsafestringnilptr": true,
+	"mulUintptr":              true,
+	"memequal0":               true,
+	"f32equal":                true,
+	"f64equal":                true,
+	"c64equal":                true,
+	"c128equal":               true,
+	"strequal":                true,
+	"interequal":              true,
+	"nilinterequal":           true,
+	"memhash":                 true,
+	"memhash0":                true,
+	"memhash8":                true,
+	"memhash16":               true,
+	"memhash32":               true,
+	"memhash64":               true,
+	"memhash128":              true,
+	"f32hash":                 true,
+	"f64hash":                 true,
+	"c64hash":                 true,
+	"c128hash":                true,
+	"strhash":                 true,
+	"interhash":               true,
+	"nilinterhash":            true,
+	"int64tofloat32":          true,
+	"uint64tofloat32":         true,
+	"getcallerpc":             true,
+	"getcallersp":             true,
+	"msanmove":                true,
+	"asanread":                true,
+	"asanwrite":               true,
+	"checkptrAlignment":       true,
+	"checkptrArithmetic":      true,
+	"libfuzzerTraceCmp1":      true,
+	"libfuzzerTraceCmp2":      true,
+	"libfuzzerTraceCmp4":      true,
+	"libfuzzerTraceCmp8":      true,
+	"libfuzzerTraceConstCmp1": true,
+	"libfuzzerTraceConstCmp2": true,
+	"libfuzzerTraceConstCmp4": true,
+	"libfuzzerTraceConstCmp8": true,
+	"libfuzzerHookStrCmp":     true,
+	"libfuzzerHookEqualFold":  true,
+	"addCovMeta":              true,
+	"x86HasFMA":               true,
+	"armHasVFPv4":             true,
 
-	// The second part of the list is extracted from assembly code in
-	// the standard library, with the exception of the runtime package itself
+	// Extracted from assembly code in the standard library, with the exception of the runtime package itself
 	"abort":                 true,
 	"aeshashbody":           true,
 	"args":                  true,
@@ -391,6 +474,23 @@ var runtimeFuncs = map[string]bool{
 	"usplitR0":              true,
 	"wbBufFlush":            true,
 	"write":                 true,
+
+	// Other runtime functions that can get called in non-standard ways
+	"bgsweep":             true,
+	"memhash_varlen":      true,
+	"strhashFallback":     true,
+	"asanregisterglobals": true,
+	"cgoUse":              true,
+	"cgoCheckPointer":     true,
+	"cgoCheckResult":      true,
+	"_cgo_panic_internal": true,
+	"addExitHook":         true,
+}
+
+var runtimeCoverageFuncs = map[string]bool{
+	"initHook":            true,
+	"markProfileEmitted":  true,
+	"processCoverTestDir": true,
 }
 
 type pkg struct {
@@ -423,7 +523,7 @@ var Analyzer = &lint.Analyzer{
 		Name:       "U1000",
 		Doc:        "Unused code",
 		Run:        run,
-		Requires:   []*analysis.Analyzer{buildir.Analyzer, facts.Generated, facts.Directives},
+		Requires:   []*analysis.Analyzer{buildir.Analyzer, generated.Analyzer, directives.Analyzer},
 		ResultType: reflect.TypeOf(Result{}),
 	},
 }
@@ -448,7 +548,11 @@ func typString(obj types.Object) string {
 	case *types.Const:
 		return "const"
 	case *types.TypeName:
-		return "type"
+		if _, ok := obj.Type().(*types.TypeParam); ok {
+			return "type param"
+		} else {
+			return "type"
+		}
 	default:
 		return "identifier"
 	}
@@ -507,7 +611,7 @@ func debugf(f string, v ...interface{}) {
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	irpkg := pass.ResultOf[buildir.Analyzer].(*buildir.IR)
-	dirs := pass.ResultOf[facts.Directives].([]lint.Directive)
+	dirs := pass.ResultOf[directives.Analyzer].([]lint.Directive)
 	pkg := &pkg{
 		Fset:       pass.Fset,
 		Files:      pass.Files,
@@ -548,9 +652,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		for _, v := range g.Nodes {
 			debugNode(v)
 		}
-		g.TypeNodes.Iterate(func(key types.Type, value interface{}) {
-			debugNode(value.(*node))
-		})
+		for _, node := range g.TypeNodes {
+			debugNode(node)
+		}
 
 		debugf("}\n")
 	}
@@ -560,10 +664,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 func results(g *graph) (used, unused []types.Object) {
 	g.color(g.Root)
-	g.TypeNodes.Iterate(func(_ types.Type, value interface{}) {
-		node := value.(*node)
+	for _, node := range g.TypeNodes {
 		if node.seen {
-			return
+			continue
 		}
 		switch obj := node.obj.(type) {
 		case *types.Struct:
@@ -580,7 +683,7 @@ func results(g *graph) (used, unused []types.Object) {
 				}
 			}
 		}
-	})
+	}
 
 	// OPT(dh): can we find meaningful initial capacities for the used and unused slices?
 
@@ -615,10 +718,14 @@ func results(g *graph) (used, unused []types.Object) {
 }
 
 type graph struct {
-	Root      *node
-	seenTypes typemap.Map
+	Root *node
 
-	TypeNodes typemap.Map
+	// Mapping of types T to canonical *T
+	pointers map[types.Type]*types.Pointer
+
+	seenTypes map[types.Type]struct{}
+
+	TypeNodes map[types.Type]*node
 	Nodes     map[interface{}]*node
 
 	// context
@@ -629,11 +736,25 @@ type graph struct {
 
 func newGraph() *graph {
 	g := &graph{
-		Nodes:   map[interface{}]*node{},
-		seenFns: map[*ir.Function]struct{}{},
+		Nodes:     map[interface{}]*node{},
+		seenFns:   map[*ir.Function]struct{}{},
+		seenTypes: map[types.Type]struct{}{},
+		TypeNodes: map[types.Type]*node{},
+		pointers:  map[types.Type]*types.Pointer{},
 	}
 	g.Root = g.newNode(nil)
 	return g
+}
+
+func (g *graph) newPointer(typ types.Type) *types.Pointer {
+	if p, ok := g.pointers[typ]; ok {
+		return p
+	} else {
+		p := types.NewPointer(typ)
+		g.pointers[typ] = p
+		g.see(p)
+		return p
+	}
 }
 
 func (g *graph) color(root *node) {
@@ -681,11 +802,11 @@ func (g *graph) nodeMaybe(obj types.Object) (*node, bool) {
 func (g *graph) node(obj interface{}) (n *node, new bool) {
 	switch obj := obj.(type) {
 	case types.Type:
-		if v := g.TypeNodes.At(obj); v != nil {
-			return v.(*node), false
+		if v := g.TypeNodes[obj]; v != nil {
+			return v, false
 		}
 		n = g.newNode(obj)
-		g.TypeNodes.Set(obj, n)
+		g.TypeNodes[obj] = n
 		return n, true
 	case types.Object:
 		// OPT(dh): the types.Object and default cases are identical
@@ -798,8 +919,30 @@ func (g *graph) see(obj interface{}) *node {
 	}
 
 	assert(obj != nil)
+
+	if fn, ok := obj.(*types.Func); ok {
+		obj = typeparams.OriginMethod(fn)
+	}
+	if t, ok := obj.(*types.Named); ok {
+		obj = t.Origin()
+	}
+
 	// add new node to graph
 	node, _ := g.node(obj)
+
+	if p, ok := obj.(*types.Pointer); ok {
+		if pt, ok := g.pointers[p.Elem()]; ok {
+			// We've used graph.newPointer before we saw this pointer; add an edge that marks the two pointers as being
+			// identical
+			if p != pt {
+				g.use(p, pt, edgeSamePointer)
+				g.use(pt, p, edgeSamePointer)
+			}
+		} else {
+			g.pointers[p.Elem()] = p
+		}
+	}
+
 	return node
 }
 
@@ -814,6 +957,21 @@ func (g *graph) use(used, by interface{}, kind edgeKind) {
 			return
 		}
 	}
+
+	if fn, ok := used.(*types.Func); ok {
+		used = typeparams.OriginMethod(fn)
+	}
+	if fn, ok := by.(*types.Func); ok {
+		by = typeparams.OriginMethod(fn)
+	}
+
+	if t, ok := used.(*types.Named); ok {
+		used = t.Origin()
+	}
+	if t, ok := by.(*types.Named); ok {
+		by = t.Origin()
+	}
+
 	usedNode, new := g.node(used)
 	assert(!new)
 	if by == nil {
@@ -1096,6 +1254,9 @@ func (g *graph) entry(pkg *pkg) {
 			if pkg.Pkg.Path() == "runtime" && runtimeFuncs[m.Name()] {
 				// (9.8) runtime functions that may be called from user code via the compiler
 				g.use(mObj, nil, edgeRuntimeFunction)
+			} else if pkg.Pkg.Path() == "runtime/coverage" && runtimeCoverageFuncs[m.Name()] {
+				// (9.8) runtime functions that may be called from user code via the compiler
+				g.use(mObj, nil, edgeRuntimeFunction)
 			}
 			if m.Source() != nil {
 				doc := m.Source().(*ast.FuncDecl).Doc
@@ -1125,7 +1286,7 @@ func (g *graph) entry(pkg *pkg) {
 	var ifaces []*types.Interface
 	var notIfaces []types.Type
 
-	g.seenTypes.Iterate(func(t types.Type, _ interface{}) {
+	for t := range g.seenTypes {
 		switch t := t.(type) {
 		case *types.Interface:
 			// OPT(dh): (8.1) we only need interfaces that have unexported methods
@@ -1135,7 +1296,7 @@ func (g *graph) entry(pkg *pkg) {
 				notIfaces = append(notIfaces, t)
 			}
 		}
-	})
+	}
 
 	// (8.0) handle interfaces
 	for _, t := range notIfaces {
@@ -1206,6 +1367,17 @@ func (g *graph) entry(pkg *pkg) {
 
 					// use methods and fields of ignored types
 					if obj, ok := obj.(*types.TypeName); ok {
+						if obj.IsAlias() {
+							if typ, ok := obj.Type().(*types.Named); ok && typ.Obj().Pkg() != obj.Pkg() {
+								// This is an alias of a named type in another package.
+								// Don't walk its fields or methods; we don't have to,
+								// and it breaks an assertion in graph.use because we're using an object that we haven't seen before.
+								//
+								// For aliases to types in the same package, we do want to ignore the fields and methods,
+								// because ignoring the alias should ignore the aliased type.
+								continue
+							}
+						}
 						if typ, ok := obj.Type().(*types.Named); ok {
 							for i := 0; i < typ.NumMethods(); i++ {
 								g.use(typ.Method(i), nil, edgeIgnored)
@@ -1224,7 +1396,7 @@ func (g *graph) entry(pkg *pkg) {
 }
 
 func (g *graph) useMethod(t types.Type, sel *types.Selection, by interface{}, kind edgeKind) {
-	obj := sel.Obj()
+	obj := sel.Obj().(*types.Func)
 	path := sel.Index()
 	assert(obj != nil)
 	if len(path) > 1 {
@@ -1251,6 +1423,7 @@ func owningObject(fn *ir.Function) types.Object {
 }
 
 func (g *graph) function(fn *ir.Function) {
+	assert(fn != nil)
 	if fn.Package() != nil && fn.Package() != g.pkg.IR {
 		return
 	}
@@ -1274,7 +1447,7 @@ func (g *graph) function(fn *ir.Function) {
 }
 
 func (g *graph) typ(t types.Type, parent types.Type) {
-	if g.seenTypes.At(t) != nil {
+	if _, ok := g.seenTypes[t]; ok {
 		return
 	}
 
@@ -1284,7 +1457,7 @@ func (g *graph) typ(t types.Type, parent types.Type) {
 		}
 	}
 
-	g.seenTypes.Set(t, struct{}{})
+	g.seenTypes[t] = struct{}{}
 	if isIrrelevant(t) {
 		return
 	}
@@ -1312,7 +1485,7 @@ func (g *graph) typ(t types.Type, parent types.Type) {
 				if _, ok := T.Underlying().(*types.Pointer); !ok {
 					// An embedded field is addressable, so check
 					// the pointer type to get the full method set
-					T = types.NewPointer(T)
+					T = g.newPointer(T)
 				}
 				ms := g.pkg.IR.Prog.MethodSets.MethodSet(T)
 				for j := 0; j < ms.Len(); j++ {
@@ -1358,13 +1531,29 @@ func (g *graph) typ(t types.Type, parent types.Type) {
 		// Nothing to do
 	case *types.Named:
 		// (9.3) types use their underlying and element types
-		g.seeAndUse(t.Underlying(), t, edgeUnderlyingType)
+		origin := t.Origin()
+		g.seeAndUse(origin.Underlying(), t, edgeUnderlyingType)
 		g.seeAndUse(t.Obj(), t, edgeTypeName)
 		g.seeAndUse(t, t.Obj(), edgeNamedType)
 
 		// (2.4) named types use the pointer type
 		if _, ok := t.Underlying().(*types.Interface); !ok && t.NumMethods() > 0 {
-			g.seeAndUse(types.NewPointer(t), t, edgePointerType)
+			g.seeAndUse(g.newPointer(origin), t, edgePointerType)
+		}
+
+		// (2.5) named types use their type parameters
+
+		for i := 0; i < t.TypeParams().Len(); i++ {
+			tparam := t.TypeParams().At(i)
+			g.seeAndUse(tparam, t, edgeTypeParam)
+			g.typ(tparam, nil)
+		}
+
+		// (2.6) named types use their type arguments
+		for i := 0; i < t.TypeArgs().Len(); i++ {
+			targ := t.TypeArgs().At(i)
+			g.seeAndUse(targ, t, edgeTypeArg)
+			g.typ(t, nil)
 		}
 
 		for i := 0; i < t.NumMethods(); i++ {
@@ -1378,7 +1567,7 @@ func (g *graph) typ(t types.Type, parent types.Type) {
 			g.function(g.pkg.IR.Prog.FuncValue(t.Method(i)))
 		}
 
-		g.typ(t.Underlying(), t)
+		g.typ(origin.Underlying(), t)
 	case *types.Slice:
 		// (9.3) types use their underlying and element types
 		g.seeAndUse(t.Elem(), t, edgeElementType)
@@ -1403,6 +1592,7 @@ func (g *graph) typ(t types.Type, parent types.Type) {
 		for i := 0; i < t.NumEmbeddeds(); i++ {
 			tt := t.EmbeddedType(i)
 			// (8.4) All embedded interfaces are marked as used
+			g.typ(tt, nil)
 			g.seeAndUse(tt, t, edgeEmbeddedInterface)
 		}
 	case *types.Array:
@@ -1422,6 +1612,22 @@ func (g *graph) typ(t types.Type, parent types.Type) {
 			// (9.3) types use their underlying and element types
 			g.seeAndUse(t.At(i).Type(), t, edgeTupleElement|edgeType)
 			g.typ(t.At(i).Type(), nil)
+		}
+	case *typeutil.Iterator:
+		// (9.3) types use their underlying and element types
+		g.seeAndUse(t.Elem(), t, edgeElementType)
+		g.typ(t.Elem(), nil)
+	case *types.TypeParam:
+		// (9.3) types use their underlying and element types
+
+		g.seeAndUse(t.Obj(), t, edgeTypeName)
+		g.seeAndUse(t, t.Obj(), edgeNamedType)
+		g.seeAndUse(t.Constraint(), t, edgeElementType)
+		g.typ(t.Constraint(), t)
+	case *types.Union:
+		for i := 0; i < t.Len(); i++ {
+			g.seeAndUse(t.Term(i).Type(), t, edgeUnionTerm)
+			g.typ(t.Term(i).Type(), nil)
 		}
 	default:
 		panic(fmt.Sprintf("unreachable: %T", t))
@@ -1453,6 +1659,20 @@ func (g *graph) signature(sig *types.Signature, fn types.Object) {
 		param := sig.Results().At(i)
 		g.seeAndUse(param.Type(), user, edgeFunctionResult|edgeType)
 		g.typ(param.Type(), nil)
+	}
+	for i := 0; i < sig.RecvTypeParams().Len(); i++ {
+		// We track the type parameter's constraint, not the type parameter itself.
+		// We never want to flag an unused type parameter.
+		param := sig.RecvTypeParams().At(i).Constraint()
+		g.seeAndUse(param, user, edgeFunctionArgument|edgeType)
+		g.typ(param, nil)
+	}
+	for i := 0; i < sig.TypeParams().Len(); i++ {
+		// We track the type parameter's constraint, not the type parameter itself.
+		// We never want to flag an unused type parameter.
+		param := sig.TypeParams().At(i).Constraint()
+		g.seeAndUse(param, user, edgeFunctionArgument|edgeType)
+		g.typ(param, nil)
 	}
 }
 
@@ -1504,19 +1724,27 @@ func (g *graph) instructions(fn *ir.Function) {
 			}
 			switch instr := instr.(type) {
 			case *ir.Field:
+				// Can't access fields via generics, for now.
+
 				st := instr.X.Type().Underlying().(*types.Struct)
 				field := st.Field(instr.Field)
 				// (4.7) functions use fields they access
 				g.seeAndUse(field, fnObj, edgeFieldAccess)
 			case *ir.FieldAddr:
-				st := typeutil.Dereference(instr.X.Type()).Underlying().(*types.Struct)
+				// User code can't access fields on type parameters, but composite literals are still possible, which
+				// compile to FieldAddr + Store.
+
+				st := typeutil.CoreType(typeutil.Dereference(instr.X.Type())).(*types.Struct)
 				field := st.Field(instr.Field)
 				// (4.7) functions use fields they access
 				g.seeAndUse(field, fnObj, edgeFieldAccess)
 			case *ir.Store:
 				// nothing to do, handled generically by operands
-			case *ir.Call:
+			case ir.CallInstruction:
 				c := instr.Common()
+				for _, targ := range c.TypeArgs {
+					g.seeAndUse(targ, fnObj, edgeTypeArg)
+				}
 				if !c.IsInvoke() {
 					// handled generically as an instruction operand
 				} else {
@@ -1528,8 +1756,8 @@ func (g *graph) instructions(fn *ir.Function) {
 			case *ir.ChangeType:
 				// conversion type handled generically
 
-				s1, ok1 := typeutil.Dereference(instr.Type()).Underlying().(*types.Struct)
-				s2, ok2 := typeutil.Dereference(instr.X.Type()).Underlying().(*types.Struct)
+				s1, ok1 := typeutil.CoreType(typeutil.Dereference(instr.Type())).(*types.Struct)
+				s2, ok2 := typeutil.CoreType(typeutil.Dereference(instr.X.Type())).(*types.Struct)
 				if ok1 && ok2 {
 					// Converting between two structs. The fields are
 					// relevant for the conversion, but only if the
@@ -1636,13 +1864,15 @@ func (g *graph) instructions(fn *ir.Function) {
 				// nothing to do
 			case *ir.Load:
 				// nothing to do
-			case *ir.Go:
-				// nothing to do
-			case *ir.Defer:
-				// nothing to do
 			case *ir.Parameter:
 				// nothing to do
 			case *ir.Const:
+				// nothing to do
+			case *ir.ArrayConst:
+				// nothing to do
+			case *ir.AggregateConst:
+				// nothing to do
+			case *ir.GenericConst:
 				// nothing to do
 			case *ir.Recv:
 				// nothing to do
@@ -1650,8 +1880,20 @@ func (g *graph) instructions(fn *ir.Function) {
 				// nothing to do
 			case *ir.ConstantSwitch:
 				// nothing to do
+			case *ir.SliceToArrayPointer:
+				// nothing to do
+			case *ir.SliceToArray:
+				// nothing to do
+			case *ir.CompositeValue:
+				if t, ok := typeutil.CoreType(instr.Type()).(*types.Struct); ok {
+					for i := 0; i < len(instr.Values); i++ {
+						if instr.Bitmap.Bit(i) == 1 {
+							g.seeAndUse(t.Field(i), fnObj, edgeFieldAccess)
+						}
+					}
+				}
 			default:
-				panic(fmt.Sprintf("unreachable: %T", instr))
+				lint.ExhaustiveTypeSwitch(instr)
 			}
 		}
 	}
@@ -1676,15 +1918,19 @@ func isNoCopyType(typ types.Type) bool {
 	if !ok {
 		return false
 	}
-	if named.NumMethods() != 1 {
-		return false
-	}
-	meth := named.Method(0)
-	if meth.Name() != "Lock" {
-		return false
-	}
-	sig := meth.Type().(*types.Signature)
-	if sig.Params().Len() != 0 || sig.Results().Len() != 0 {
+	switch num := named.NumMethods(); num {
+	case 1, 2:
+		for i := 0; i < num; i++ {
+			meth := named.Method(i)
+			if meth.Name() != "Lock" && meth.Name() != "Unlock" {
+				return false
+			}
+			sig := meth.Type().(*types.Signature)
+			if sig.Params().Len() != 0 || sig.Results().Len() != 0 {
+				return false
+			}
+		}
+	default:
 		return false
 	}
 	return true
